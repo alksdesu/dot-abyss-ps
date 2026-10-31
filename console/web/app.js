@@ -595,6 +595,30 @@
     return form;
   }
   let picker = null;
+  function activePicker(current) {
+    return current && picker === current && $("picker-dialog").open
+      && current.scope === scoped() && state.currentForm === current.form
+      && current.form.source(current.name) === current.source;
+  }
+  function closePicker() {
+    picker = null;
+    $("picker-dialog").close();
+  }
+  function commitPicker(current = picker) {
+    if (!activePicker(current) || !current.selected.size) return;
+    const { form, name, multiple } = current;
+    const ids = [...current.selected.keys()];
+    form.remember(current.source, [...current.selected.values()], current.identity_field);
+    if (multiple) {
+      let prior = [];
+      try {
+        prior = parseField(form.controls.get(name).spec, form.controls.get(name).input.value) || [];
+      } catch {}
+      form.set(name, [...new Set([...prior, ...ids])]);
+    } else form.set(name, ids[0]);
+    closePicker();
+    form.controls.get(name).input.focus();
+  }
   async function pick(form, name) {
     const spec = form.controls.get(name).spec;
     if (spec.readonly || spec.editable === false) return;
@@ -617,13 +641,19 @@
     $("picker-subtitle").textContent =
       spec.type === "ids"
         ? "可选择多条记录，按名称或 ID 缩小范围。"
-        : "选择一条记录后填入。";
+        : "点击一条记录，立即填入并关闭。";
     $("picker-query").value = "";
+    $("picker-results").replaceChildren();
+    $("picker-count").textContent = "正在读取…";
+    $("picker-prev").disabled = true;
+    $("picker-next").disabled = true;
+    $("picker-confirm").hidden = !picker.multiple;
+    $("picker-confirm").disabled = true;
     $("picker-dialog").showModal();
     await loadPicker();
   }
   async function loadPicker() {
-    if (!picker) return;
+    if (!activePicker(picker)) return;
     const current = picker,
       request = ++current.request;
     try {
@@ -633,9 +663,8 @@
         current.offset,
       );
       if (
-        picker !== current ||
-        request !== current.request ||
-        current.scope !== scoped()
+        !activePicker(current) ||
+        request !== current.request
       )
         return;
       const holder = $("picker-results");
@@ -647,8 +676,9 @@
       );
       const body = h("tbody");
       rows.forEach((row) => {
-        const id = recordIdentity(row, current.identity_field);
-        const selectable = id != null && /^-?\d+$/.test(String(id)) && Number.isSafeInteger(Number(id));
+        const identity = recordIdentity(row, current.identity_field);
+        const id = Number(identity);
+        const selectable = identity != null && /^-?\d+$/.test(String(identity)) && Number.isSafeInteger(id);
         const check = h("input", {
           type: current.multiple ? "checkbox" : "radio",
           name: "picker-row",
@@ -658,12 +688,20 @@
         });
         check.checked = current.selected.has(id);
         const tr = h("tr", { class: check.checked ? "selected" : "" });
-        check.addEventListener("change", () => {
+        const select = () => {
+          if (!selectable || !activePicker(current) || request !== current.request) return;
           if (!current.multiple) current.selected.clear();
           if (check.checked) current.selected.set(id, row);
           else current.selected.delete(id);
-          if (!current.multiple) loadPicker();
+          $("picker-confirm").disabled = !current.selected.size;
+          if (!current.multiple) commitPicker(current);
           else tr.classList.toggle("selected", check.checked);
+        };
+        check.addEventListener("change", select);
+        tr.addEventListener("click", (event) => {
+          if (!selectable || event.target.closest("input, button, a")) return;
+          check.checked = current.multiple ? !check.checked : true;
+          select();
         });
         tr.append(h("td", {}, check));
         columns.forEach((key) =>
@@ -707,7 +745,7 @@
       $("picker-prev").disabled = current.offset === 0;
       $("picker-next").disabled = current.offset + 100 >= result.total;
     } catch (failure) {
-      error(failure);
+      if (activePicker(current) && request === current.request) error(failure);
     }
   }
 
@@ -1948,8 +1986,7 @@
     rememberProfile(state.profile);
     state.snapshot = {};
     invalidate();
-    $("picker-dialog").close();
-    picker = null;
+    closePicker();
     renderLauncher();
     if (
       !state.profiles.find((profile) => profile.id === state.profile)?.has_state
@@ -2055,42 +2092,31 @@
       node.addEventListener("click", () => node.closest("dialog").close()),
     );
   $("picker-search").addEventListener("click", () => {
+    if (!activePicker(picker)) return;
     picker.offset = 0;
     loadPicker();
   });
   $("picker-query").addEventListener("keydown", (event) => {
-    if (event.key === "Enter") {
+    if (event.key === "Enter" && activePicker(picker)) {
+      event.preventDefault();
       picker.offset = 0;
       loadPicker();
     }
   });
   $("picker-prev").addEventListener("click", () => {
+    if (!activePicker(picker)) return;
     picker.offset = Math.max(0, picker.offset - 100);
     loadPicker();
   });
   $("picker-next").addEventListener("click", () => {
+    if (!activePicker(picker)) return;
     picker.offset += 100;
     loadPicker();
   });
-  $("picker-confirm").addEventListener("click", () => {
-    if (!picker || picker.scope !== scoped()) return;
-    const ids = [...picker.selected.keys()];
-    if (!ids.length) return;
-    const { form, name, multiple } = picker;
-    form.remember(picker.source, [...picker.selected.values()], picker.identity_field);
-    if (multiple) {
-      let prior = [];
-      try {
-        prior =
-          parseField(
-            form.controls.get(name).spec,
-            form.controls.get(name).input.value,
-          ) || [];
-      } catch {}
-      form.set(name, [...new Set([...prior, ...ids])]);
-    } else form.set(name, ids[0]);
-    $("picker-dialog").close();
-    picker = null;
+  $("picker-confirm").addEventListener("click", () => commitPicker());
+  $("picker-dialog").addEventListener("cancel", () => { picker = null; });
+  $("picker-dialog").addEventListener("close", () => {
+    if (!$("picker-dialog").open) picker = null;
   });
   document.addEventListener("keydown", (event) => {
     if (event.key === "F5") {
