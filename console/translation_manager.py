@@ -12,6 +12,7 @@ from pathlib import Path
 
 from dotabyss_ps.admin_launcher import game_processes
 from dotabyss_ps.process_lock import ProcessLockBusy, exclusive_process_lock
+from dotabyss_ps.release_manifest import default_client_dir, default_release
 from .client import ConsoleError
 from .service_manager import child_options
 
@@ -37,7 +38,8 @@ def read_object(path, limit=4 * 1024 * 1024):
 class TranslationManager:
     def __init__(self, *, project_root=None):
         self.root = Path(project_root or Path(__file__).resolve().parents[1]).resolve()
-        self.client = self.root.parent / "dotabyss_pc" / "local-client"
+        self.client = default_client_dir(self.root)
+        self.identity = default_release(self.root)["build"]["identity"]
         self.target = self.client / "BepInEx" / "plugins" / "AbyssMod"
         self.jobs = self.root / "artifacts" / "translation" / "jobs"
         self.process = None
@@ -97,7 +99,7 @@ class TranslationManager:
     def _availability(self):
         try:
             manifest = read_object(self.client / "local-client.json")
-            if manifest.get("identity") != {"company": "LocalGames", "product": "DotAbyssLocalPlayer"}:
+            if manifest.get("identity") != self.identity:
                 return False, "请先准备本地客户端副本。"
             name = manifest.get("executable")
             if not isinstance(name, str) or Path(name).name != name or not name.lower().endswith(".exe"):

@@ -10,6 +10,7 @@ from console import translation_manager as module
 from console.client import ConsoleError
 from dotabyss_ps.admin_launcher import GameProcess
 from dotabyss_ps.process_lock import exclusive_process_lock
+from dotabyss_ps.release_manifest import load_manifest
 
 
 class Process:
@@ -30,6 +31,9 @@ def context(tmp_path, monkeypatch):
     entry = root / "pc-translation" / "prepare_translation.py"
     entry.parent.mkdir()
     entry.write_text("raise AssertionError('not executed')", encoding="utf-8")
+    manifest_path = root / "pc/releases/manifest.json"
+    manifest_path.parent.mkdir(parents=True)
+    manifest_path.write_text(json.dumps(load_manifest()), encoding="utf-8")
     manager = module.TranslationManager(project_root=root)
     manager.client.mkdir(parents=True)
     (manager.client / "local-client.json").write_text(json.dumps({

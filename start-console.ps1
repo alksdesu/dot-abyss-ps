@@ -1,6 +1,6 @@
 param(
     [int]$Port = 18083,
-    [string]$DataDirectory = (Join-Path $PSScriptRoot 'data-pc-1.15.0'),
+    [string]$DataDirectory,
     [switch]$NoConnect,
     [switch]$Classic,
     [switch]$Demo

@@ -9,6 +9,8 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 from urllib.parse import quote
 
+from dotabyss_ps.release_manifest import default_data_dir
+
 from .client import AdminClient, ConsoleError, read_token
 from .display import display_value, matches_query, record_identity_field, record_rows, row_identity, row_label
 from .labels import RULE_LABELS, SYNC_LABELS
@@ -62,7 +64,7 @@ class ConsoleApp:
         self.settings_path = settings_path or Path(os.environ.get("LOCALAPPDATA", Path.home())) / "DotAbyssConsole" / "settings.json"
         settings = self._load_settings()
         self.origin = origin if origin is not None else settings.get("origin", "http://127.0.0.1:18083")
-        self.data_dir = str(Path(data_dir).resolve()) if data_dir is not None else settings.get("data_dir", str(Path(__file__).resolve().parents[1] / "data-pc-1.15.0"))
+        self.data_dir = str(Path(data_dir).resolve()) if data_dir is not None else settings.get("data_dir") or str(default_data_dir())
         self.client = None
         self.tasks = BackgroundTasks()
         self.generation = 0

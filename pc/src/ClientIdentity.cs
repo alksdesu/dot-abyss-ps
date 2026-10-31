@@ -4,12 +4,11 @@ namespace DotAbyss.Local.Pc;
 
 internal static class ClientIdentity
 {
-    internal const string ApplicationVersion = "1.15.0";
-    internal const string MetadataHash = "d38f026a769e522b136830785ad2789f834c47127be764f89ab294b4d91f056d";
-    internal const string NativeHash = "d32ffc1e7940265e3e3952339f6cc53c190d13923edd8e275705b046a0e1b4bd";
-    internal const string PreparedSettingsHash = "e32a51da7fd1607dbf9d13bf24592ec2ebab5cc426b7886dbe769a6bc32f53e9";
-    internal const string MasterHash = "ee9f68157917ee9601c539f950aaf98ae9b446a54dac66707bc297746efac523";
-    internal const string CatalogVersionHash = "a9ac4a676495720b605313d6f48dfb41";
+    internal const string ApplicationVersion = ClientBuildProfile.ApplicationVersion;
+    internal const string MetadataHash = ClientBuildProfile.MetadataHash;
+    internal const string NativeHash = ClientBuildProfile.NativeHash;
+    internal const string PreparedSettingsHash = ClientBuildProfile.PreparedSettingsHash;
+    internal const string SchemaHash = ClientBuildProfile.SchemaHash;
 
     internal static void VerifyFiles(string dataPath)
     {

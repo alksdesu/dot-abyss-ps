@@ -1,10 +1,14 @@
 param(
     [string]$DummyDirectory = (Join-Path $PSScriptRoot '..\..\dotabyss_pc\toolchain\dummy-annotated'),
     [string]$Cecil = (Join-Path $PSScriptRoot '..\..\dotabyss_pc\toolchain\runtime\BepInEx\core\Mono.Cecil.dll'),
-    [string]$OutputDirectory = (Join-Path $PSScriptRoot '..\artifacts\ida\pc-1.15.0')
+    [string]$OutputDirectory
 )
 
 $ErrorActionPreference = 'Stop'
+$releaseManifest = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'releases\manifest.json') -Raw | ConvertFrom-Json
+$releaseBuild = $releaseManifest.releases.PSObject.Properties[$releaseManifest.default_release].Value.build
+if (-not $releaseBuild.application_version -or -not $releaseBuild.launcher_product_id) { throw 'Invalid client release manifest.' }
+if (-not $OutputDirectory) { $OutputDirectory = Join-Path $PSScriptRoot ('..\artifacts\ida\pc-' + $releaseBuild.application_version) }
 Add-Type -Path $Cecil
 New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
 $apiTypes = [System.Collections.Generic.List[object]]::new()
@@ -81,7 +85,7 @@ $requestTypes = @($apiTypes | Where-Object { $_.type.EndsWith('RequestEntity') }
     if ($getters.Count -gt 0) { @{type = $request.type; getters = $getters; route_binding_verified = $false} }
 })
 $apiMethodEnum = ($eventEnums | Where-Object { $_.type -eq 'Absf.Api.ApiMethod' }).values
-@{sources = $sources.ToArray(); client = 'dotabyss_x_cl 1.15.0'; api_method_enum = $apiMethodEnum; request_types = $requestTypes; note = 'Native metadata declarations require getter analysis to confirm routes.'} |
+@{sources = $sources.ToArray(); client = ($releaseBuild.launcher_product_id + ' ' + $releaseBuild.application_version); api_method_enum = $apiMethodEnum; request_types = $requestTypes; note = 'Native metadata declarations require getter analysis to confirm routes.'} |
     ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $OutputDirectory 'request-getter-index.json') -Encoding utf8
 @{sources = $sources.ToArray(); types = $battleTypes.ToArray(); native_implementation_verified = $false} |
     ConvertTo-Json -Depth 12 | Set-Content -LiteralPath (Join-Path $OutputDirectory 'battle-contract-index.json') -Encoding utf8

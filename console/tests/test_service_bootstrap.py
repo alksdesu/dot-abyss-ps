@@ -9,6 +9,11 @@ from console import service_bootstrap as module
 from console.client import ConsoleError
 
 
+@pytest.fixture(autouse=True)
+def lifecycle_schema(monkeypatch):
+    monkeypatch.setattr(module, "default_schema_path", lambda root: root / "artifacts" / "master-schema-pc-1.15.0.json")
+
+
 @pytest.mark.parametrize("wrapped", [False, True])
 def test_timeout_with_exclusively_free_port_is_offline(monkeypatch, wrapped):
     origin = "http://127.0.0.1:18083"

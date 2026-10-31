@@ -6,26 +6,11 @@ from typing import Any
 
 from .protocol import decode_json
 from .gameplay_records import OPTIONAL_ROW_FIELDS, validate_optional_records, identity_field
+from .release_manifest import load_manifest
 
 POLICY_VERSION = 5
-SUPPORTED_CLIENT = {
-    "package": "jp.co.fanzagames.dotabyss_x_a.mod",
-    "version": "1.14.4",
-    "metadata_sha256": "e144b637ceaabbcb385555d11213ba46b30216ff8df76d3d8fa8854d1582f130",
-}
-SUPPORTED_CLIENTS = (
-    SUPPORTED_CLIENT,
-    {
-        "package": "com.exnoa.abyss",
-        "version": "1.15.0",
-        "metadata_sha256": "2bbdadf0952016d5e21a34e2699de54bc97eacb9c8f85b4650e93e80c3cb0e7c",
-    },
-    {
-        "package": "dotabyss_x_cl",
-        "version": "1.15.0",
-        "metadata_sha256": "d38f026a769e522b136830785ad2789f834c47127be764f89ab294b4d91f056d",
-    },
-)
+SUPPORTED_CLIENTS = tuple(load_manifest()["supported_clients"])
+SUPPORTED_CLIENT = SUPPORTED_CLIENTS[0]
 LOCAL_BUILDING_IDS = (100, 200, 300, 500, 1000)
 EQUIPMENT_LIMIT = 100
 MAX_PARTY_COUNT = 1

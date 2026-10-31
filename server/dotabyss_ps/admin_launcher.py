@@ -18,6 +18,7 @@ from .asset_index import PC_CATALOG_HASH_PATH, PC_CATALOG_PATH, PC_CATALOG_PREFI
 from .assets import AssetCatalog, AssetDataError
 from .gameplay_catalog import GameplayError
 from .process_lock import ProcessLockBusy, exclusive_process_lock
+from .release_manifest import default_release, load_local_release
 
 
 @dataclass(frozen=True)
@@ -116,13 +117,14 @@ class GameLauncher:
     def __init__(self, store, local_state, *, project_root=None):
         self.store, self.local = store, local_state
         self.project_root = Path(project_root or Path(__file__).resolve().parents[2]).resolve()
-        self.client_root = (self.project_root.parent / "dotabyss_pc" / "local-client").resolve()
-        self.release_path = self.project_root / "pc" / "releases" / "pc-1.15.0.json"
+        self.release_profile = default_release(self.project_root)
+        self.client_root = (self.project_root / self.release_profile["paths"]["client_directory"]).resolve()
+        self.release_path = self.project_root / self.release_profile["paths"]["local_release"]
         self.receipt_path = self.client_root / "local-launcher-session.json"
 
     def _paths(self):
-        release = read_object(self.release_path)
-        if release.get("identity") != {"company": "LocalGames", "product": "DotAbyssLocalPlayer"}:
+        release = load_local_release(self.project_root)
+        if release.get("identity") != self.release_profile["build"]["identity"]:
             raise ValueError("启动器版本绑定不匹配")
         name = release.get("executable")
         if not isinstance(name, str) or Path(name).name != name or not name.lower().endswith(".exe"):
@@ -205,9 +207,12 @@ class GameLauncher:
         if self.local is None:
             raise GameplayError("本地游戏服务尚未配置主数据", 503, 5038)
         master = self.local._active()
-        if master["client"]["package"] != "dotabyss_x_cl" or master["client"]["version"] != release["application_version"]:
+        build = self.release_profile["build"]
+        metadata = next(value for key, value in build["source_fingerprints"].items() if key.endswith("/il2cpp_data/Metadata/global-metadata.dat"))
+        expected_client = {"package": build["launcher_product_id"], "version": build["application_version"], "metadata_sha256": metadata}
+        if master.get("client") != expected_client or master.get("schema_sha256") != build["schema"]["sha256"]:
             raise GameplayError("本地客户端与服务端版本不一致", 409, 4098)
-        catalog = AssetCatalog(self.store.path.parent, self.store)
+        catalog = AssetCatalog(self.store.path.parent, self.store, release_profile=self.release_profile)
         assets = catalog.status()
         if not assets.get("active") or assets.get("error"):
             raise GameplayError("本地游戏资源未就绪：" + assets.get("error", "缺少资源清单"), 503, 5038)
@@ -217,9 +222,10 @@ class GameLauncher:
             active_assets = catalog.active()
         except AssetDataError as error:
             raise GameplayError("本地游戏资源未就绪：" + str(error), 503, 5038) from error
-        if (not active_assets or active_assets.get("prefix") != PC_CATALOG_PREFIX
-                or active_assets.get("catalog", {}).get("relative_path") != PC_CATALOG_PATH
-                or active_assets.get("catalog_hash", {}).get("relative_path") != PC_CATALOG_HASH_PATH):
+        transport = build["transport"]
+        if (not active_assets or active_assets.get("prefix") != transport["catalog_prefix"]
+                or active_assets.get("catalog", {}).get("relative_path") != transport["catalog_path"]
+                or active_assets.get("catalog_hash", {}).get("relative_path") != transport["catalog_hash_path"]):
             raise GameplayError("本地游戏资源未就绪：PC catalog 请求路径映射不匹配，请重新导入资源。", 503, 5038)
         manifest = self._verify_client(release)
         plugin = self.client_root / "BepInEx" / "plugins" / "DotAbyss.Local.Pc" / "DotAbyss.Local.Pc.dll"
@@ -267,7 +273,7 @@ class GameLauncher:
         if config is None:
             config = {"ExpectedCompany": release["identity"]["company"], "ExpectedProduct": release["identity"]["product"],
                       "ExpectedPersistentPath": manifest["profile"], "TimeoutSeconds": 20}
-        if (config.get("ExpectedCompany") != "LocalGames" or config.get("ExpectedProduct") != "DotAbyssLocalPlayer"
+        if (config.get("ExpectedCompany") != release["identity"]["company"] or config.get("ExpectedProduct") != release["identity"]["product"]
                 or config.get("ExpectedPersistentPath") != manifest["profile"]):
             raise GameplayError("客户端隔离身份配置不匹配", 409, 4098)
         stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")

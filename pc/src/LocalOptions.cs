@@ -7,8 +7,8 @@ internal sealed record LocalOptions
 {
     public string ServiceOrigin { get; init; } = "http://127.0.0.1:18083/";
     public string Profile { get; init; } = "pc-default";
-    public string ExpectedCompany { get; init; } = "LocalGames";
-    public string ExpectedProduct { get; init; } = "DotAbyssLocalPlayer";
+    public string ExpectedCompany { get; init; } = ClientBuildProfile.IdentityCompany;
+    public string ExpectedProduct { get; init; } = ClientBuildProfile.IdentityProduct;
     public string ExpectedPersistentPath { get; init; } = "";
     public int TimeoutSeconds { get; init; } = 20;
 
@@ -35,7 +35,7 @@ internal sealed record LocalOptions
             throw new InvalidDataException("The local service must use a plain IPv4 loopback origin.");
         if (!Regex.IsMatch(Profile, "\\A[A-Za-z0-9_.-]{1,64}\\z") || TimeoutSeconds is < 1 or > 120)
             throw new InvalidDataException("Invalid local profile or timeout.");
-        if (ExpectedCompany != "LocalGames" || ExpectedProduct != "DotAbyssLocalPlayer"
+        if (ExpectedCompany != ClientBuildProfile.IdentityCompany || ExpectedProduct != ClientBuildProfile.IdentityProduct
             || !Path.IsPathFullyQualified(ExpectedPersistentPath))
             throw new InvalidDataException("The isolated PC identity is not configured.");
         return origin;

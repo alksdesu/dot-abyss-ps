@@ -81,29 +81,6 @@
       }
     ]
   },
-  "profile_seeds": [
-    {
-      "source": "C:\\Users\\YourName\\AppData\\LocalLow\\EXNOA LLC_\\ドットアビスX\\com.unity.addressables\\1791059991.bin",
-      "relative": "com.unity.addressables/1791059991.bin",
-      "sha256": "2ae3d88442c7c081bcf9c48a98a4afbe8d460fb6fba570e35ff6461a4f949036"
-    },
-    {
-      "source": "C:\\Users\\YourName\\AppData\\LocalLow\\EXNOA LLC_\\ドットアビスX\\com.unity.addressables\\1791059991.hash",
-      "relative": "com.unity.addressables/1791059991.hash",
-      "sha256": "813697fc2036c65c94e7dcc3c516bb0c9055d326d8d958f5d3a66e6d23c8725d"
-    },
-    {
-      "source": "C:\\Users\\YourName\\AppData\\LocalLow\\EXNOA LLC_\\ドットアビスX\\DownloadCache\\b0309c2fc3389ac234aab4ca138373f2.dat",
-      "relative": "DownloadCache/b0309c2fc3389ac234aab4ca138373f2.dat",
-      "sha256": "ee9f68157917ee9601c539f950aaf98ae9b446a54dac66707bc297746efac523"
-    }
-  ],
-  "updates": {
-    "activation": "explicit verified release only",
-    "user_overrides": "separate from immutable master payload",
-    "save_migration": "explicit versioned migration before activation",
-    "unimplemented_event_logic": "unsupported; never synthesized success"
-  },
   "prepared_fingerprints": {
     "baselib.dll": "d393eeab49a372ef543dbeeeb3d08cff10706ae4725c45462c288c4abfb21be2",
     "GameAssembly.dll": "d32ffc1e7940265e3e3952339f6cc53c190d13923edd8e275705b046a0e1b4bd",
@@ -149,5 +126,28 @@
     "ドットアビスX_Data/Plugins/x86_64/FirebaseCppMessaging.dll": "88af894044e09bf8fb7ac45a2aa4c1d458fc3f56e5c3d5ba51dcf86b23b3e8a3",
     "ドットアビスX_Data/Plugins/x86_64/Live2DCubismCore.dll": "c4599835b0349fcae774cedc6dbd0057743fa503d4cc0af8f9022ca3dd845634",
     "ドットアビスX_Data/StreamingAssets/CriStreamingData/abyss_pv_release.usm0752992b3f0733406c48a417e3b73583": "33bbc71b39deba9b4e14c99178a2bda6866a3d90bf48b65ab139499220627042"
+  },
+  "profile_seeds": [
+    {
+      "source": "C:\\Users\\YourName\\AppData\\LocalLow\\EXNOA LLC_\\ドットアビスX\\com.unity.addressables\\1791059991.bin",
+      "relative": "com.unity.addressables/1791059991.bin",
+      "sha256": "2ae3d88442c7c081bcf9c48a98a4afbe8d460fb6fba570e35ff6461a4f949036"
+    },
+    {
+      "source": "C:\\Users\\YourName\\AppData\\LocalLow\\EXNOA LLC_\\ドットアビスX\\com.unity.addressables\\1791059991.hash",
+      "relative": "com.unity.addressables/1791059991.hash",
+      "sha256": "813697fc2036c65c94e7dcc3c516bb0c9055d326d8d958f5d3a66e6d23c8725d"
+    },
+    {
+      "source": "C:\\Users\\YourName\\AppData\\LocalLow\\EXNOA LLC_\\ドットアビスX\\DownloadCache\\b0309c2fc3389ac234aab4ca138373f2.dat",
+      "relative": "DownloadCache/b0309c2fc3389ac234aab4ca138373f2.dat",
+      "sha256": "ee9f68157917ee9601c539f950aaf98ae9b446a54dac66707bc297746efac523"
+    }
+  ],
+  "updates": {
+    "activation": "explicit verified release only",
+    "user_overrides": "separate from immutable master payload",
+    "save_migration": "explicit versioned migration before activation",
+    "unimplemented_event_logic": "unsupported; never synthesized success"
   }
 }

@@ -8,10 +8,11 @@ import sys
 from pathlib import Path
 
 from dotabyss_ps.admin_launcher import atomic_bytes, game_processes, read_object
-from dotabyss_ps.asset_index import PC_CATALOG_HASH_PATH, PC_CATALOG_PATH, build_index
+from dotabyss_ps.asset_index import build_index
 from dotabyss_ps.assets import AssetCatalog, read_bounded
 from dotabyss_ps.masterdata import MasterCatalog, canonical_json, inspect_payload
 from dotabyss_ps.process_lock import ProcessLockBusy, exclusive_process_lock
+from dotabyss_ps.release_manifest import default_client_dir, default_data_dir, default_release, default_schema_path, load_local_release, local_release_path
 from dotabyss_ps.storage import Store
 from pc.prepare_client import prepare, verify_client
 from pc.setup_client import install_plugin, resolve_seeds
@@ -36,8 +37,8 @@ def _cache(release, source, supplied):
         return path, resolve_seeds(release, path)
     local_low = Path(os.environ["USERPROFILE"]) / "AppData/LocalLow"
     choices = ([source.parent / "resource-cache"] if source else []) + [
-        local_low / "EXNOA LLC_/ドットアビスX",
-        local_low / "LocalGames/DotAbyssLocalPlayer",
+        local_low / "EXNOA LLC_" / Path(release["executable"]).stem,
+        local_low / release["identity"]["company"] / release["identity"]["product"],
     ]
     errors = []
     for path in choices:
@@ -69,13 +70,11 @@ def _shared(source, cache, supplied, index, executable):
 
 def inspect_inputs(project_root, *, source=None, cache_root=None, shared_root=None):
     root = Path(project_root).resolve()
-    client = root.parent / "dotabyss_pc/local-client"
-    release_path = root / "pc/releases/pc-1.15.0.json"
-    release = read_object(release_path if release_path.exists() or release_path.is_symlink()
-                          else root / "pc/releases/pc-1.15.0.example.json")
-    if (release.get("identity") != {"company": "LocalGames", "product": "DotAbyssLocalPlayer"}
-            or release.get("application_version") != "1.15.0" or release.get("launcher_product_id") != "dotabyss_x_cl"):
-        raise ValueError("PC setup requires the supported 1.15.0 release definition")
+    release_profile = default_release(root)
+    client = default_client_dir(root)
+    release_path = local_release_path(root)
+    release = load_local_release(root)
+    transport = release_profile["build"]["transport"]
     if source is None and (client / "local-client.json").is_file():
         previous = read_object(client / "local-client.json").get("source_root")
         source = previous if isinstance(previous, str) and Path(previous).is_dir() else None
@@ -98,9 +97,11 @@ def inspect_inputs(project_root, *, source=None, cache_root=None, shared_root=No
 
     catalog, catalog_hash = seed("com.unity.addressables", ".bin"), seed("com.unity.addressables", ".hash")
     master = seed("DownloadCache", ".dat")
-    index = build_index(catalog, catalog_hash)
+    index = build_index(catalog, catalog_hash, remote_base=transport["remote_base"], transport=transport)
+    if index["catalog_version_hash"] != release_profile["content"]["catalog_version_hash"]:
+        raise ValueError("Catalog hash does not match the selected content definition")
     shared = _shared(source, cache, shared_root, index, release["executable"])
-    schema = root / "artifacts/master-schema-pc-1.15.0.json"
+    schema = default_schema_path(root)
     report = inspect_payload(read_bounded(master, 64 * 1024 * 1024), read_object(schema))
     metadata = next((value for key, value in release["source_fingerprints"].items()
                      if key.endswith("/il2cpp_data/Metadata/global-metadata.dat")), None)
@@ -108,7 +109,7 @@ def inspect_inputs(project_root, *, source=None, cache_root=None, shared_root=No
             or report["client"].get("version") != release["application_version"]
             or report["client"].get("metadata_sha256") != metadata):
         raise ValueError("Master schema does not match the selected PC client")
-    return {"root": root, "client": client, "release_path": release_path, "release": release,
+    return {"root": root, "client": client, "release_path": release_path, "release": release, "release_profile": release_profile,
             "source": source, "cache": cache, "shared": shared, "catalog": catalog, "catalog_hash": catalog_hash,
             "master": master, "schema": schema, "index": index, "master_report": report}
 
@@ -125,6 +126,7 @@ def _check_active(store, report):
 
 def import_resources(inputs, data_dir, *, allow_partial=False, progress=print):
     data_dir = Path(data_dir).resolve()
+    transport = inputs["release_profile"]["build"]["transport"]
     index_path = data_dir / "setup/resource-url-index.json"
     report_path = data_dir / "setup/resource-report.json"
     _regular_output(index_path)
@@ -135,23 +137,23 @@ def import_resources(inputs, data_dir, *, allow_partial=False, progress=print):
     master = masters.stage(inputs["master"], inputs["schema"], "PC setup: verified local cache")
     if master["revision"] != inputs["master_report"]["revision"]:
         raise ValueError("Master data or schema changed during setup; check the cache and retry")
-    assets = AssetCatalog(data_dir, store)
+    assets = AssetCatalog(data_dir, store, release_profile=inputs["release_profile"])
     active = assets.active()
     if active is not None:
         reusable = (active["master"]["revision"] == master["revision"] and active.get("complete")
                     and active["catalog"]["sha256"] == inputs["index"]["catalog_sha256"]
                     and active["catalog_hash_value"] == inputs["index"]["catalog_version_hash"]
-                    and active["catalog"].get("relative_path") == PC_CATALOG_PATH
-                    and active["catalog_hash"].get("relative_path") == PC_CATALOG_HASH_PATH)
+                    and active["catalog"].get("relative_path") == transport["catalog_path"]
+                    and active["catalog_hash"].get("relative_path") == transport["catalog_hash_path"])
         if reusable:
             progress("Validating the existing complete resource manifest...")
             summary = assets.activate(active["revision"])
             return {"master_revision": master["revision"], "assets": summary, "reused": True}
     atomic_bytes(index_path, canonical_json(inputs["index"]))
     progress("Validating and importing cached resources; large caches may take several minutes...")
-    staged = AssetCatalog(data_dir, _PendingMaster(master)).stage(
+    staged = AssetCatalog(data_dir, _PendingMaster(master), release_profile=inputs["release_profile"]).stage(
         index_path, inputs["catalog"], inputs["catalog_hash"], inputs["shared"], "PC setup: verified local cache",
-        allow_partial=True, catalog_relative_path=PC_CATALOG_PATH, catalog_hash_relative_path=PC_CATALOG_HASH_PATH)
+        allow_partial=True, catalog_relative_path=transport["catalog_path"], catalog_hash_relative_path=transport["catalog_hash_path"])
     report = {"indexed_count": staged["indexed_count"], "verified_count": staged["verified_count"],
               "missing": staged["missing"], "complete": staged["complete"], "revision": staged["revision"]}
     atomic_bytes(report_path, canonical_json(report))
@@ -171,7 +173,7 @@ def initialize(project_root, *, source=None, cache_root=None, shared_root=None, 
                allow_partial=False, check=False, progress=print):
     inputs = inspect_inputs(project_root, source=source, cache_root=cache_root, shared_root=shared_root)
     root, client = inputs["root"], inputs["client"]
-    data_dir = Path(data_dir).resolve() if data_dir is not None else root / "data-pc-1.15.0"
+    data_dir = Path(data_dir).resolve() if data_dir is not None else default_data_dir(root)
     result = {"client": str(client), "cache": str(inputs["cache"]), "shared": str(inputs["shared"]),
               "data_dir": str(data_dir), "indexed_count": len(inputs["index"]["records"]),
               "master_revision": inputs["master_report"]["revision"]}
@@ -198,7 +200,7 @@ def initialize(project_root, *, source=None, cache_root=None, shared_root=None, 
                 atomic_bytes(release_path, canonical_json(inputs["release"]))
             result.update(import_resources(inputs, data_dir, allow_partial=allow_partial, progress=progress))
         if (client / "BepInEx/interop/Project.dll").is_file():
-            progress("Building and installing the local plugin...")
+            progress("Checking and installing the local plugin...")
             result["plugin"] = install_plugin(root, client)
             result["ready"] = True
         else:
@@ -223,9 +225,8 @@ def main():
         if args.plugin_only:
             if args.check or args.allow_partial or args.source or args.cache_dir or args.shared_dir or args.data_dir:
                 parser.error("--plugin-only cannot be combined with initialization options")
-            release_path = root / "pc/releases/pc-1.15.0.json"
-            client = root.parent / "dotabyss_pc/local-client"
-            verify_client(client, read_object(release_path))
+            client = default_client_dir(root)
+            verify_client(client, load_local_release(root))
             result = {"plugin": install_plugin(root, client), "ready": True}
         else:
             result = initialize(root, source=args.source, cache_root=args.cache_dir, shared_root=args.shared_dir,

@@ -12,6 +12,7 @@ import traceback
 from datetime import datetime
 from pathlib import Path
 
+from dotabyss_ps.release_manifest import default_client_dir, default_release
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKSPACE = ROOT.parent
@@ -223,7 +224,7 @@ def translation_config(original):
 
 def client_executable(client):
     identity = read_json(client / "local-client.json")
-    if identity.get("identity") != {"company": "LocalGames", "product": "DotAbyssLocalPlayer"}:
+    if identity.get("identity") != default_release(ROOT)["build"]["identity"]:
         raise ValueError("Select the prepared local client, not the official client")
     name = identity.get("executable")
     if not isinstance(name, str) or Path(name).name != name or not name.casefold().endswith(".exe"):
@@ -269,7 +270,7 @@ def merge_local_dictionaries(target, stage):
 def install(stage, client, report):
     client = client.resolve()
     identity = read_json(client / "local-client.json")["identity"]
-    if identity != {"company": "LocalGames", "product": "DotAbyssLocalPlayer"}:
+    if identity != default_release(ROOT)["build"]["identity"]:
         raise ValueError("Select the prepared local client, not the official client")
     target = checked(client / "BepInEx" / "plugins" / "AbyssMod", client)
     config = checked(client / "BepInEx" / "config" / "AbyssMod.cfg", client)
@@ -357,7 +358,7 @@ def run(client, *, apply=False, fetch=False, bootstrap=False, notify=progress):
 
 def main():
     parser = argparse.ArgumentParser(description="Prepare or install the local Traditional Chinese translation")
-    parser.add_argument("--client", type=Path, default=WORKSPACE / "dotabyss_pc" / "local-client")
+    parser.add_argument("--client", type=Path, default=default_client_dir(ROOT))
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--fetch", action="store_true")
     parser.add_argument("--bootstrap", action="store_true")

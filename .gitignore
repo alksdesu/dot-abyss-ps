@@ -51,6 +51,7 @@ integration-manifest.json
 # Machine-specific release configuration
 /pc/releases/*.json
 !/pc/releases/*.example.json
+!/pc/releases/manifest.json
 /pc/tests/*audit.json
 /pc/tests/verification.json
 

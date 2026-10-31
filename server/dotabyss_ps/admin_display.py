@@ -6,12 +6,12 @@ import threading
 from pathlib import Path
 
 from .admin_display_references import DisplayResolver, MasterDisplayIndex, reference_table
+from .release_manifest import default_client_dir
 
 
 class DisplayTranslations:
     def __init__(self, root=None):
-        workspace = Path(__file__).resolve().parents[3]
-        self.root = Path(root) if root is not None else workspace / "dotabyss_pc" / "local-client" / "BepInEx" / "plugins" / "AbyssMod" / "cache" / "translations"
+        self.root = Path(root) if root is not None else default_client_dir() / "BepInEx" / "plugins" / "AbyssMod" / "cache" / "translations"
         self.lock = threading.RLock()
         self.cache = {}
 

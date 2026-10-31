@@ -10,6 +10,7 @@ from pathlib import Path
 from urllib.parse import quote, urlsplit
 
 from dotabyss_ps.process_lock import ProcessLockBusy, exclusive_process_lock
+from dotabyss_ps.release_manifest import default_schema_path
 from .client import ConsoleError, read_token
 from .service_bootstrap import ServiceMismatch, ServiceUnavailable, canonical_origin, compatible_client, health
 
@@ -130,7 +131,10 @@ class ServiceManager:
 
     def _validate(self):
         python = self.root / ".venv" / "Scripts" / "python.exe"
-        schema = self.root / "artifacts" / "master-schema-pc-1.15.0.json"
+        try:
+            schema = default_schema_path(self.root)
+        except (OSError, ValueError) as error:
+            raise ConsoleError("版本清单或主数据结构无效：" + str(error), 409) from error
         if not python.is_file() or not schema.is_file() or not (self.data_dir / "local.sqlite3").is_file():
             raise ConsoleError("缺少服务环境、主数据结构或存档数据库，请检查项目目录。", 409)
         return python, schema

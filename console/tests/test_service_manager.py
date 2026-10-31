@@ -56,6 +56,7 @@ def context(tmp_path, monkeypatch):
     schema = root / "artifacts" / "master-schema-pc-1.15.0.json"
     schema.parent.mkdir(parents=True)
     schema.write_text("{}")
+    monkeypatch.setattr(module, "default_schema_path", lambda selected: schema if selected == root else None)
     data = root / "data"
     data.mkdir()
     (data / "local.sqlite3").write_bytes(b"test only")

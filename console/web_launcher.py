@@ -5,6 +5,8 @@ import os
 import subprocess
 from pathlib import Path
 
+from dotabyss_ps.release_manifest import default_data_dir
+
 from .client import ConsoleError, service_origin
 from .host_runtime import ensure_host
 
@@ -29,7 +31,7 @@ def launch(origin: str | None, data_dir: Path | None, *, demo=False):
     except (OSError, ValueError):
         pass
     origin = service_origin(origin or settings.get("origin", "http://127.0.0.1:18083"))
-    directory = data_dir or Path(settings.get("data_dir", str(Path(__file__).resolve().parents[1] / "data-pc-1.15.0")))
+    directory = data_dir or (Path(settings["data_dir"]) if settings.get("data_dir") else default_data_dir())
     executable = edge_path()
     if demo:
         url = (Path(__file__).resolve().parent / "host_web" / "index.html").as_uri() + "?demo=1"

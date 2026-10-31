@@ -14,6 +14,7 @@ from urllib.parse import urlsplit
 from .masterdata import canonical_json
 from .newgame import SUPPORTED_CLIENTS
 from .storage import Store
+from .release_manifest import load_manifest
 
 MAX_ASSET_BYTES = 128 * 1024 * 1024
 MAX_MANIFEST_BYTES = 32 * 1024 * 1024
@@ -22,7 +23,6 @@ CRI_PROVIDER = "CriWare.Assets.CriResourceProvider"
 NAMESPACES = {
     "com.exnoa.abyss": "resources/android_googleplay/normal/",
     "jp.co.fanzagames.dotabyss_x_a.mod": "resources/android/r18/",
-    "dotabyss_x_cl": "resources/windows/r18/",
 }
 
 
@@ -178,12 +178,25 @@ def cache_filename(info: bytes, entry: dict) -> str:
 
 
 class AssetCatalog:
-    def __init__(self, data_dir: Path, store: Store):
+    def __init__(self, data_dir: Path, store: Store, *, release_profile: dict | None = None):
         self.root = data_dir.resolve() / "assets"
         self.store = store
         self._cached_revision = None
         self._cached_manifest = None
         self._lock = threading.Lock()
+        self._release_profiles = [release_profile] if release_profile is not None else list(load_manifest()["releases"].values())
+
+    def _resource_transport(self, client: dict) -> dict | None:
+        matches = []
+        for profile in self._release_profiles:
+            build = profile["build"]
+            metadata = next((value for key, value in build["source_fingerprints"].items()
+                             if key.endswith("/il2cpp_data/Metadata/global-metadata.dat")), None)
+            if client == {"package": build["launcher_product_id"], "version": build["application_version"], "metadata_sha256": metadata}:
+                matches.append(build["transport"])
+        if matches and any(value != matches[0] for value in matches[1:]):
+            raise AssetDataError("Client matches conflicting resource transport definitions")
+        return matches[0] if matches else None
 
     def _path(self, relative: str) -> Path:
         path = (self.root / safe_relative(relative)).resolve()
@@ -259,10 +272,12 @@ class AssetCatalog:
             raise AssetDataError("The resource index requires an explicit remote base binding")
         remote = urlsplit(binding["remote_base"])
         prefix = safe_relative(remote.path.lstrip("/").rstrip("/"))
-        namespace = NAMESPACES[master["client"]["package"]]
+        transport = self._resource_transport(master["client"])
+        namespace = NAMESPACES.get(master["client"]["package"])
         if remote.scheme != "https" or not remote.hostname or remote.username is not None or remote.password is not None or remote.query or remote.fragment:
             raise AssetDataError("Invalid remote base URL")
-        if not prefix.startswith(namespace + "aas/") or not prefix.endswith("/aa"):
+        if (transport is not None and prefix != transport["catalog_prefix"]
+                or transport is None and (namespace is None or not prefix.startswith(namespace + "aas/") or not prefix.endswith("/aa"))):
             raise AssetDataError("Asset namespace does not match the active master client")
         if bool(catalog_relative_path) != bool(catalog_hash_relative_path):
             raise AssetDataError("Both catalog and hash URL paths must be explicitly supplied")
@@ -393,6 +408,9 @@ class AssetCatalog:
     def summary(manifest: dict) -> dict:
         return {key: manifest[key] for key in ("revision", "master", "prefix", "indexed_count", "verified_count", "complete")} | {
             "missing_count": len(manifest["missing"]), "catalog_served": manifest["catalog"]["relative_path"] is not None,
+            "catalog": {key: manifest["catalog"][key] for key in ("relative_path", "sha256", "bytes")},
+            "catalog_hash": {key: manifest["catalog_hash"][key] for key in ("relative_path", "sha256", "bytes")},
+            "catalog_hash_value": manifest["catalog_hash_value"],
         }
 
     def status(self) -> dict:

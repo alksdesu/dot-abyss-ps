@@ -19,4 +19,5 @@
   <Target Name="RequireInterop" BeforeTargets="ResolveAssemblyReferences">
     <Error Condition="!Exists('$(ClientDir)\BepInEx\interop\Project.dll')" Text="The exact PC interop assemblies must be generated before building this adapter." />
   </Target>
+  <Import Project="ClientBuildProfile.targets" />
 </Project>

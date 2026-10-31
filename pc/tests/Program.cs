@@ -5,6 +5,12 @@ using System.Text.Json;
 using System.Runtime.InteropServices;
 using DotAbyss.Local.Pc;
 
+if (args.SequenceEqual(new[] { "--content-binding" }))
+{
+    ContentBindingChecks.Run();
+    return;
+}
+
 if (args.SequenceEqual(new[] { "--character-levels" }))
 {
     CharacterLevelChecks.Run();
@@ -175,15 +181,16 @@ Reject(() => (options with { TimeoutSeconds = 0 }).Validate(), "Reject invalid t
 Check(!TransportPolicy.SameOrigin(new Uri("http://127.0.0.1:18084/api/home"), origin), "Port binding");
 Check(!TransportPolicy.SameOrigin(new Uri("https://127.0.0.1:18083/api/home"), origin), "Scheme binding");
 Check(TransportPolicy.SameOrigin(new Uri(origin, "/api/home"), origin), "Native local origin");
-Check(TransportPolicy.IsResourcePath("/resources/windows/r18/aas/0.1.0/aa/catalog_1.bin"), "PC resource route");
-Check(TransportPolicy.IsCatalogRoot(new Uri(origin, "/resources/windows/r18/aas/0.1.0/aa"), origin), "Native catalog root includes its final aa component");
-Check(!TransportPolicy.IsCatalogRoot(new Uri(origin, "/resources/windows/r18/aas/0.1.0"), origin), "Missing aa component rejected");
-Check(!TransportPolicy.IsCatalogRoot(new Uri(origin, "/resources/windows/r18/aas/0.1.0/aa/aa"), origin), "Duplicated aa component rejected");
-Check(!TransportPolicy.IsCatalogRoot(new Uri(origin, "/resources/windows/r18/aas/0.1.1/aa"), origin), "Unverified catalog version rejected");
+Check(TransportPolicy.IsResourcePath(TransportPolicy.CatalogPath), "PC resource route");
+Check(TransportPolicy.IsCatalogRoot(new Uri(origin, TransportPolicy.CatalogRoot), origin), "Native catalog root includes its final component");
+var nativeResourceBase = TransportPolicy.CatalogRoot[..TransportPolicy.CatalogRoot.LastIndexOf('/')];
+Check(!TransportPolicy.IsCatalogRoot(new Uri(origin, nativeResourceBase), origin), "Missing catalog component rejected");
+Check(!TransportPolicy.IsCatalogRoot(new Uri(origin, TransportPolicy.CatalogRoot + "/aa"), origin), "Duplicated catalog component rejected");
+Check(!TransportPolicy.IsCatalogRoot(new Uri(origin, TransportPolicy.CatalogRoot.Replace("/" + ClientBuildProfile.BundleVersion + "/", "/unsupported/", StringComparison.Ordinal)), origin), "Unverified catalog version rejected");
 Check(!TransportPolicy.IsCatalogRoot(new Uri(origin, "/resources/android/r18/aas/0.1.0/aa"), origin), "Other platform catalog rejected");
-Check(!TransportPolicy.IsCatalogRoot(new Uri(origin, "/resources/windows/r18/aas/0.1.0/aa/"), origin), "Unverified trailing catalog separator rejected");
-Check(TransportPolicy.CatalogHashPath == "/resources/windows/r18/aas/0.1.0/aa/catalog_1.hash", "Catalog hash consumer uses exact native root");
-Check(TransportPolicy.ResourcePathDiagnostic(new Uri("https://private.example/resources/windows/r18/aas/0.1.0/aa?token=private")) == TransportPolicy.CatalogRoot, "Catalog diagnostics contain only a bounded resource path");
+Check(!TransportPolicy.IsCatalogRoot(new Uri(origin, TransportPolicy.CatalogRoot + "/"), origin), "Unverified trailing catalog separator rejected");
+Check(TransportPolicy.CatalogHashPath == TransportPolicy.CatalogRoot + "/" + ClientBuildProfile.CatalogHashFileName, "Catalog hash consumer uses exact native root");
+Check(TransportPolicy.ResourcePathDiagnostic(new Uri("https://private.example" + TransportPolicy.CatalogRoot + "?token=private")) == TransportPolicy.CatalogRoot, "Catalog diagnostics contain only a bounded resource path");
 Check(!TransportPolicy.ResourcePathDiagnostic(new Uri("https://private.example/secret-value")).Contains("secret-value"), "Nonresource diagnostic path excluded");
 Check(!TransportPolicy.IsResourcePath("/resources/android/r18/aa/catalog_1.bin"), "Reject Android namespace");
 Check(!TransportPolicy.IsApiPath("/api-lookalike"), "API path boundary");
@@ -196,7 +203,7 @@ foreach (var address in new[] { "https://external.example/terms/fetch", "http://
     Check(!TransportPolicy.AllowsHttp(new Uri(address), origin), "Terms bootstrap retains origin and credential restrictions");
 foreach (var path in new[] { "/terms/fetch-other", "/terms/fetch/", "/terms/fetch/detail", "/terms/get-view/1", "/Terms/fetch", "/terms/fetch%2fprivate" })
     Check(!TransportPolicy.IsApiPath(path) && !TransportPolicy.AllowsHttp(new Uri(origin, path), origin), "Terms bootstrap does not permit lookalikes or nested routes: " + path);
-Check(TransportPolicy.IsApiPath("/version") && TransportPolicy.AllowsHttp(new Uri(origin, "/version?app_version=1.15.0"), origin), "Version bootstrap uses the authenticated local API transport");
+Check(TransportPolicy.IsApiPath("/version") && TransportPolicy.AllowsHttp(new Uri(origin, "/version?app_version=" + ClientIdentity.ApplicationVersion), origin), "Version bootstrap uses the authenticated local API transport");
 foreach (var address in new[] { "https://external.example/version", "http://127.0.0.1:18084/version", "http://user:pass@127.0.0.1:18083/version" })
     Check(!TransportPolicy.AllowsHttp(new Uri(address), origin), "Version bootstrap retains origin and credential restrictions");
 foreach (var path in new[] { "/version-other", "/version/", "/version/detail", "/Version", "/version%2fprivate" })
@@ -229,11 +236,11 @@ using (var diagnostic = JsonDocument.Parse(TransportPolicy.RejectedRequestDiagno
     Check(diagnostic.RootElement.GetProperty("path").GetString() == "/terms/get-view/<redacted>", "Parameterized terms route keeps only its fixed prefix");
 Check(TransportPolicy.LocalizeOrigin("https://example.com/data/", origin) == "http://127.0.0.1:18083/data/", "Preserve native master suffix");
 Check(TransportPolicy.LocalizeOrigin("https://example.com/", origin) == origin.AbsoluteUri, "Preserve native root suffix");
-Check(TransportPolicy.LocalizeOrigin("https://example.com/resources/windows/r18/aas/0.1.0", origin) == "http://127.0.0.1:18083/resources/windows/r18/aas/0.1.0", "Preserve native platform suffix");
+Check(TransportPolicy.LocalizeOrigin("https://example.com" + nativeResourceBase, origin) == new Uri(origin, nativeResourceBase).AbsoluteUri, "Preserve native platform suffix");
 Check(TransportPolicy.SameOrigin(new Uri(TransportPolicy.LocalizeOrigin("https://example.com//outside.example/path", origin)), origin), "Double-slash resource paths cannot replace origin");
 Check(TransportPolicy.SameOrigin(new Uri(TransportPolicy.LocalizeOrigin("https://example.com/%2f%2foutside.example/path", origin)), origin), "Escaped path separators cannot replace origin");
 Reject(() => TransportPolicy.LocalizeOrigin("https://example.com/data/?token=x", origin), "Reject signed resource config");
-foreach (var path in new[] { "/data/master.bin", "/master/current.dat", "/resources/windows/r18/aas/0.1.0/aa/file.bundle", "/data/escaped%20name.dat" })
+foreach (var path in new[] { "/data/master.bin", "/master/current.dat", TransportPolicy.CatalogRoot + "/file.bundle", "/data/escaped%20name.dat" })
 {
     var localUrl = new Uri(origin, path).AbsoluteUri;
     Check(TransportPolicy.TryLocalResourceUrl(localUrl, origin, out var preservedUrl) && preservedUrl == localUrl
@@ -270,36 +277,7 @@ try
 }
 finally { File.Delete(config); }
 
-foreach (var failure in new[] { "", "package", "version", "metadata", "master", "revision", "prefix", "catalog", "state", "asset-client", "schema" })
-{
-    using var binding = JsonDocument.Parse(JsonSerializer.Serialize(new
-    {
-        master = new
-        {
-            client = new { package = failure == "package" ? "com.exnoa.abyss" : "dotabyss_x_cl", version = failure == "version" ? "1.14.4" : ClientIdentity.ApplicationVersion,
-                metadata_sha256 = failure == "metadata" ? "changed" : ClientIdentity.MetadataHash },
-            sha256 = failure == "master" ? "changed" : ClientIdentity.MasterHash,
-            revision = "local-pc-master", schema_sha256 = "schema-hash"
-        },
-        assets = new
-        {
-            error = "",
-            active = new
-            {
-                master = new
-                {
-                    revision = failure == "revision" ? "other-master" : "local-pc-master", sha256 = ClientIdentity.MasterHash,
-                    schema_sha256 = failure == "schema" ? "wrong-schema" : "schema-hash",
-                    client = new { package = failure == "asset-client" ? "com.exnoa.abyss" : "dotabyss_x_cl", version = ClientIdentity.ApplicationVersion, metadata_sha256 = ClientIdentity.MetadataHash }
-                },
-                prefix = failure == "prefix" ? "resources/android/r18/aas/0.1.0/aa" : "resources/windows/r18/aas/0.1.0/aa", catalog_served = failure != "catalog"
-            }
-        },
-        local_state = new { enabled = failure != "state", error = "" }
-    }));
-    if (failure == "") { LocalSession.VerifyBinding(binding.RootElement); checks++; }
-    else Reject(() => LocalSession.VerifyBinding(binding.RootElement), "Reject mismatched binding: " + failure);
-}
+checks += ContentBindingChecks.Run(writeResult: false);
 
 foreach (var serverTime in new[] { "2026-10-30 19:00:00", "2026-10-31T04:00:00+09:00" })
 using (var handler = new LocalHandler { ServerTime = serverTime })
@@ -313,8 +291,8 @@ using (var session = new LocalSession(origin, options, handler))
     Check(handler.AuthenticatedRequests == 1, "Local authenticated request headers");
     session.Report("native_login_returned", new { ready = true });
     Check(handler.AuthenticatedRequests == 2 && handler.ReportComponent == "pc-adapter", "PC diagnostic identity");
-    Reject(() => session.RegisterRuntime("1", "0.1.0", "1.14.4"), "Reject runtime version mismatch");
-    Reject(() => session.RegisterRuntime("1", "9.9.9", "1.15.0"), "Reject bundle mismatch");
+    Reject(() => session.RegisterRuntime("1", ClientBuildProfile.BundleVersion, "unsupported"), "Reject runtime version mismatch");
+    Reject(() => session.RegisterRuntime("1", "unsupported", ClientIdentity.ApplicationVersion), "Reject bundle mismatch");
 }
 foreach (var failure in new[] { "user", "uuid", "session", "api", "status", "time", "error", "http" })
 {

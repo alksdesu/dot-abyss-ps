@@ -12,11 +12,13 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from .assets import AssetDataError, CRI_PROVIDER, MAX_ASSET_BYTES, MAX_MANIFEST_BYTES, UNITY_PROVIDER, hexadecimal, read_bounded, safe_relative
+from .release_manifest import default_release
 
-PC_CATALOG_PREFIX = "resources/windows/r18/aas/0.1.0/aa"
-PC_CATALOG_PATH = PC_CATALOG_PREFIX + "/catalog_1.bin"
-PC_CATALOG_HASH_PATH = PC_CATALOG_PREFIX + "/catalog_1.hash"
-DEFAULT_REMOTE_BASE = "https://pc-local.invalid/" + PC_CATALOG_PREFIX
+_TRANSPORT = default_release()["build"]["transport"]
+PC_CATALOG_PREFIX = _TRANSPORT["catalog_prefix"]
+PC_CATALOG_PATH = _TRANSPORT["catalog_path"]
+PC_CATALOG_HASH_PATH = _TRANSPORT["catalog_hash_path"]
+DEFAULT_REMOTE_BASE = _TRANSPORT["remote_base"]
 REMOTE_PROPERTY = "{Absf.Asset.AddressableAssets.AddressablesProfileDefine.RemoteLoadPath}"
 LOCAL_PROPERTY = "{Absf.Asset.AddressableAssets.AddressablesProfileDefine.LocalLoadPath}"
 BUNDLED_PROVIDER = "UnityEngine.ResourceManagement.ResourceProviders.BundledAssetProvider"
@@ -155,7 +157,7 @@ class _CatalogReader:
         return {"cache_key": key, "hash128": self.take(digest, 16).hex(), "bundle_size": size}
 
 
-def _remote_base(value: str) -> str:
+def _remote_base(value: str, prefix: str = PC_CATALOG_PREFIX) -> str:
     if not isinstance(value, str) or not 1 <= len(value) <= 2048 or any(ord(char) < 33 or ord(char) > 126 for char in value):
         raise AssetDataError("PC resource base must be a URL")
     try:
@@ -165,12 +167,13 @@ def _remote_base(value: str) -> str:
         raise AssetDataError("PC resource base is invalid") from error
     if (parsed.scheme != "https" or not parsed.hostname or parsed.username is not None
             or parsed.password is not None or parsed.query or parsed.fragment
-            or parsed.path.rstrip("/") != "/" + PC_CATALOG_PREFIX):
+            or parsed.path.rstrip("/") != "/" + prefix):
         raise AssetDataError("PC resource base does not match the supported catalog namespace")
-    return parsed._replace(path="/" + PC_CATALOG_PREFIX).geturl()
+    return parsed._replace(path="/" + prefix).geturl()
 
 
-def _decode(payload: bytes, remote_base: str) -> tuple[str, list[dict]]:
+def _decode(payload: bytes, remote_base: str, transport: dict | None = None) -> tuple[str, list[dict]]:
+    transport = _TRANSPORT if transport is None else transport
     reader = _CatalogReader(payload)
     magic, version, keys, locator, instance, scene, providers, build_hash = reader.unpack("<8I", 0)
     if magic != CATALOG_MAGIC or version != 2:
@@ -228,8 +231,8 @@ def _decode(payload: bytes, remote_base: str) -> tuple[str, list[dict]]:
             continue
         if not internal_id.startswith(REMOTE_PROPERTY + "/"):
             raise AssetDataError("Catalog resource uses an unknown load path")
-        relative = safe_relative(PC_CATALOG_PREFIX + internal_id[len(REMOTE_PROPERTY):])
-        if relative in (PC_CATALOG_PATH, PC_CATALOG_HASH_PATH):
+        relative = safe_relative(transport["catalog_prefix"] + internal_id[len(REMOTE_PROPERTY):])
+        if relative in (transport["catalog_path"], transport["catalog_hash_path"]):
             raise AssetDataError("Catalog resource collides with a catalog URL")
         record = {"relative_path": relative, "resolved_url": remote_base + internal_id[len(REMOTE_PROPERTY):],
                   **options, "provider": provider}
@@ -244,8 +247,13 @@ def _decode(payload: bytes, remote_base: str) -> tuple[str, list[dict]]:
     return result_hash, [records[path] for path in sorted(records)]
 
 
-def build_index(catalog_path: Path, catalog_hash_path: Path, *, remote_base: str = DEFAULT_REMOTE_BASE) -> dict:
-    remote_base = _remote_base(remote_base)
+def build_index(catalog_path: Path, catalog_hash_path: Path, *, remote_base: str | None = None, transport: dict | None = None) -> dict:
+    transport = _TRANSPORT if transport is None else transport
+    prefix = safe_relative(transport["catalog_prefix"])
+    for key in ("catalog_path", "catalog_hash_path"):
+        if not safe_relative(transport[key]).startswith(prefix + "/"):
+            raise AssetDataError("Catalog path is outside its release namespace")
+    remote_base = _remote_base(transport["remote_base"] if remote_base is None else remote_base, prefix)
     payload = read_bounded(Path(catalog_path), MAX_ASSET_BYTES)
     try:
         version_hash = read_bounded(Path(catalog_hash_path), 128).decode("ascii").strip()
@@ -253,7 +261,7 @@ def build_index(catalog_path: Path, catalog_hash_path: Path, *, remote_base: str
         raise AssetDataError("Catalog version hash is not ASCII") from error
     if not hexadecimal(version_hash, 32):
         raise AssetDataError("Catalog version hash is invalid")
-    build_hash, records = _decode(payload, remote_base)
+    build_hash, records = _decode(payload, remote_base, transport)
     return {"format_version": 1, "catalog_sha256": hashlib.sha256(payload).hexdigest(),
             "catalog_build_result_hash": build_hash, "catalog_version_hash": version_hash,
             "binding": {"remote_base": remote_base, "kind": "local_logical_namespace", "network_access_required": False},

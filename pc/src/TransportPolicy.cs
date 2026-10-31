@@ -6,10 +6,11 @@ namespace DotAbyss.Local.Pc;
 internal static class TransportPolicy
 {
     internal const int MaxBodyBytes = 2 * 1024 * 1024;
-    internal const string ResourceRoot = "/resources/windows/r18/";
-    internal const string CatalogPrefix = "resources/windows/r18/aas/0.1.0/aa";
+    internal const string ResourceRoot = ClientBuildProfile.ResourceRoot;
+    internal const string CatalogPrefix = ClientBuildProfile.CatalogPrefix;
     internal const string CatalogRoot = "/" + CatalogPrefix;
-    internal const string CatalogHashPath = CatalogRoot + "/catalog_1.hash";
+    internal const string CatalogPath = ClientBuildProfile.CatalogPath;
+    internal const string CatalogHashPath = ClientBuildProfile.CatalogHashPath;
 
     internal static string ApiBase(Uri origin) => origin.AbsoluteUri;
 
@@ -69,7 +70,7 @@ internal static class TransportPolicy
         if (path is "/" or "/maintenance" or "/login" or "/version" or "/uuid" or "/uuid/verified"
             or "/terms/fetch" or "/terms/get-view" or "/api/terms/agree" or "/api/terms/fetch-agreements"
             or "/dmm/client/acquisition" or "/dmm/client/regist" or "/api/user" or "/api/home" or "/api/mypage/login"
-            or CatalogRoot or CatalogHashPath or CatalogRoot + "/catalog_1.bin") return path;
+            or CatalogRoot or CatalogHashPath or CatalogPath) return path;
         foreach (var prefix in new[] { "/terms/get-view/", "/terms/", "/uuid/", "/dmm/client/", "/api/", "/resources/", "/data/", "/master/" })
             if (path.StartsWith(prefix, StringComparison.Ordinal)) return prefix + "<redacted>";
         return "<redacted>";

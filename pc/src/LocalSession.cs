@@ -27,46 +27,39 @@ internal sealed class LocalSession : IDisposable
         lock (gate) return session ??= CreateAsync().ConfigureAwait(false).GetAwaiter().GetResult();
     }
 
-    internal void VerifyServer()
+    internal void VerifyServer() => VerifyServerAsync().ConfigureAwait(false).GetAwaiter().GetResult();
+
+    private async Task VerifyServerAsync()
     {
-        using var response = client.GetAsync("/diagnostics").ConfigureAwait(false).GetAwaiter().GetResult();
+        using var deadline = new CancellationTokenSource(client.Timeout);
+        using var response = await client.GetAsync("/diagnostics", deadline.Token).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
-        using var document = JsonDocument.Parse(response.Content.ReadAsStringAsync().ConfigureAwait(false).GetAwaiter().GetResult());
-        VerifyBinding(document.RootElement);
-        using var hashResponse = client.GetAsync(TransportPolicy.CatalogHashPath).ConfigureAwait(false).GetAwaiter().GetResult();
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(deadline.Token).ConfigureAwait(false));
+        var binding = VerifyBinding(document.RootElement);
+        using var request = new HttpRequestMessage(HttpMethod.Get, binding.CatalogHash.Path);
+        using var hashResponse = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, deadline.Token).ConfigureAwait(false);
         hashResponse.EnsureSuccessStatusCode();
-        if (hashResponse.Content.ReadAsStringAsync().ConfigureAwait(false).GetAwaiter().GetResult().Trim() != ClientIdentity.CatalogVersionHash)
-            throw new InvalidDataException("The local catalog does not match this prepared PC client.");
+        if (!hashResponse.Headers.TryGetValues("X-Asset-Revision", out var revisions)
+            || !revisions.SequenceEqual(new[] { binding.Revision })
+            || hashResponse.Content.Headers.ContentLength is long length && length != binding.CatalogHash.Bytes)
+            throw new InvalidDataException("The local resource snapshot changed during startup; retry after the update completes.");
+        using var stream = await hashResponse.Content.ReadAsStreamAsync(deadline.Token).ConfigureAwait(false);
+        var payload = new byte[binding.CatalogHash.Bytes + 1];
+        var used = 0;
+        int read;
+        while ((read = await stream.ReadAsync(payload.AsMemory(used), deadline.Token).ConfigureAwait(false)) != 0)
+        {
+            used += read;
+            if (used > binding.CatalogHash.Bytes) throw new InvalidDataException("The local catalog hash exceeds its bound size.");
+        }
+        binding.VerifyCatalogHash(payload.AsSpan(0, used));
     }
 
-    internal static void VerifyBinding(JsonElement status)
-    {
-        var master = status.GetProperty("master");
-        var client = master.GetProperty("client");
-        var assets = status.GetProperty("assets");
-        var active = assets.GetProperty("active");
-        var assetMaster = active.GetProperty("master");
-        if (client.GetProperty("package").GetString() != "dotabyss_x_cl"
-            || client.GetProperty("version").GetString() != ClientIdentity.ApplicationVersion
-            || client.GetProperty("metadata_sha256").GetString() != ClientIdentity.MetadataHash
-            || master.GetProperty("sha256").GetString() != ClientIdentity.MasterHash
-            || assets.GetProperty("error").GetString() != ""
-            || assetMaster.GetProperty("revision").GetString() != master.GetProperty("revision").GetString()
-            || assetMaster.GetProperty("sha256").GetString() != ClientIdentity.MasterHash
-            || assetMaster.GetProperty("schema_sha256").GetString() != master.GetProperty("schema_sha256").GetString()
-            || assetMaster.GetProperty("client").GetProperty("package").GetString() != "dotabyss_x_cl"
-            || assetMaster.GetProperty("client").GetProperty("version").GetString() != ClientIdentity.ApplicationVersion
-            || assetMaster.GetProperty("client").GetProperty("metadata_sha256").GetString() != ClientIdentity.MetadataHash
-            || active.GetProperty("prefix").GetString() != TransportPolicy.CatalogPrefix
-            || !active.GetProperty("catalog_served").GetBoolean()
-            || !status.GetProperty("local_state").GetProperty("enabled").GetBoolean()
-            || status.GetProperty("local_state").GetProperty("error").GetString() != "")
-            throw new InvalidDataException("The local service master, assets and PC profile are not bound together.");
-    }
+    internal static ContentBinding VerifyBinding(JsonElement status) => ContentBinding.Parse(status);
 
     internal void RegisterRuntime(string appCode, string bundle, string applicationVersion)
     {
-        if (applicationVersion != ClientIdentity.ApplicationVersion || string.IsNullOrWhiteSpace(appCode) || bundle != "0.1.0")
+        if (applicationVersion != ClientIdentity.ApplicationVersion || string.IsNullOrWhiteSpace(appCode) || bundle != ClientBuildProfile.BundleVersion)
             throw new InvalidDataException("The native runtime does not match the prepared client.");
         using var response = client.PostAsJsonAsync("/local/runtime", new
         {

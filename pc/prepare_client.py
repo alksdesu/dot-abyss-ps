@@ -8,6 +8,8 @@ import shutil
 import struct
 from pathlib import Path
 
+from dotabyss_ps.release_manifest import default_client_dir, load_local_release
+
 
 def digest(path: Path) -> str:
     with path.open("rb") as stream:
@@ -75,18 +77,19 @@ def verify_client(destination: Path, release: dict, *, require_seeds: bool = Fal
         raise ValueError("Prepared identity, executable or profile differs from the reviewed release")
     if manifest.get("profile_physical_path") != str(profile.resolve(strict=True)):
         raise ValueError("The Windows profile storage context changed")
-    for item in release["profile_seeds"]:
-        seed = within(profile, item["relative"])
-        if str(seed) != manifest.get("profile_seed_paths", {}).get(item["relative"]):
+    seed_paths = manifest.get("profile_seed_paths", {})
+    if not isinstance(seed_paths, dict):
+        raise ValueError("The Windows cache storage context changed")
+    for relative, recorded_path in seed_paths.items():
+        if str(within(profile, relative)) != recorded_path:
             raise ValueError("The Windows cache storage context changed")
-        try:
-            seed_digest = digest(seed)
-        except FileNotFoundError:
-            if require_seeds:
-                raise
-            continue
-        if seed_digest != item["sha256"]:
-            raise ValueError("Prepared catalog or master seed changed")
+    if require_seeds:
+        for item in release["profile_seeds"]:
+            seed = within(profile, item["relative"])
+            if str(seed) != seed_paths.get(item["relative"]):
+                raise ValueError("The Windows cache storage context changed")
+            if digest(seed) != item["sha256"]:
+                raise ValueError("Prepared catalog or master seed changed")
     for relative, expected in manifest["prepared_fingerprints"].items():
         if digest(within(destination, relative)) != expected:
             raise ValueError("Prepared client fingerprint changed: " + relative)
@@ -159,13 +162,14 @@ def prepare(source: Path, destination: Path, release: dict, profile: Path) -> di
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Prepare a fingerprint-bound isolated PC client")
-    parser.add_argument("--release", type=Path, required=True)
+    parser.add_argument("--release", type=Path)
     parser.add_argument("--source", type=Path)
-    parser.add_argument("--destination", type=Path, required=True)
+    parser.add_argument("--destination", type=Path)
     parser.add_argument("--verify", action="store_true")
     args = parser.parse_args()
-    release = json.loads(args.release.read_text(encoding="utf-8"))
-    destination = args.destination.resolve()
+    root = Path(__file__).resolve().parents[1]
+    release = json.loads(args.release.read_text(encoding="utf-8")) if args.release is not None else load_local_release(root)
+    destination = args.destination.resolve() if args.destination is not None else default_client_dir(root)
     if args.verify:
         result = verify_client(destination, release)
     else:

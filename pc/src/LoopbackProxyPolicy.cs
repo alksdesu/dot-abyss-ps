@@ -12,10 +12,10 @@ internal sealed record ProxyOptionChange(int OriginalBytes, int AddedHosts);
 internal static class LoopbackProxyPolicy
 {
     internal const int NoProxyOption = 10177;
-    internal const int EntryRva = 0x1aa3750;
+    internal const int EntryRva = ClientBuildProfile.ProxyEntryRva;
     internal const int MaxCStringBytes = 16384;
-    internal const string UnityPlayerHash = "d935627d3ac843293f1c51ee9d85538191f0cb98def4271c1a29302b52a021d4";
-    internal const string EntryHex = "895424104c894424184c894c24204883ec284885c975088d412b4883c428c34c";
+    internal const string UnityPlayerHash = ClientBuildProfile.UnityPlayerHash;
+    internal const string EntryHex = ClientBuildProfile.ProxyEntryHex;
     private static readonly UTF8Encoding Utf8 = new(false, true);
     private static readonly string[] LoopbackHosts = { "127.0.0.1", "localhost", "::1" };
 

@@ -13,8 +13,10 @@
     <Compile Include="..\src\AdminSyncProtocol.cs" Link="AdminSyncProtocol.cs" />
     <Compile Include="..\src\CharacterLevelProjection.cs" Link="CharacterLevelProjection.cs" />
     <Compile Include="..\src\ClientIdentity.cs" Link="ClientIdentity.cs" />
+    <Compile Include="..\src\ContentBinding.cs" Link="ContentBinding.cs" />
     <Compile Include="..\src\ExceptionFrames.cs" Link="ExceptionFrames.cs" />
     <Compile Include="..\src\LoopbackProxyPolicy.cs" Link="LoopbackProxyPolicy.cs" />
     <Compile Include="..\src\OperationIdentities.cs" Link="OperationIdentities.cs" />
   </ItemGroup>
+  <Import Project="..\ClientBuildProfile.targets" />
 </Project>

@@ -1,0 +1,19 @@
+<Project>
+  <PropertyGroup>
+    <ClientProfileRoot>$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)', '..'))</ClientProfileRoot>
+    <PythonExe Condition="'$(PythonExe)' == '' and Exists('$(ClientProfileRoot).venv\Scripts\python.exe')">$(ClientProfileRoot).venv\Scripts\python.exe</PythonExe>
+    <PythonExe Condition="'$(PythonExe)' == '' and Exists('$(ClientProfileRoot).venv/bin/python')">$(ClientProfileRoot).venv/bin/python</PythonExe>
+    <PythonExe Condition="'$(PythonExe)' == ''">python</PythonExe>
+  </PropertyGroup>
+  <Target Name="GenerateClientBuildProfile" BeforeTargets="CoreCompile">
+    <PropertyGroup>
+      <_ClientProfileOutput>$([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(IntermediateOutputPath)', 'ClientBuildProfile.g.cs'))</_ClientProfileOutput>
+      <_ClientProfileArgument Condition="'$(ClientProfile)' != ''">--profile &quot;$(ClientProfile)&quot;</_ClientProfileArgument>
+    </PropertyGroup>
+    <Exec WorkingDirectory="$(ClientProfileRoot)" Command="&quot;$(PythonExe)&quot; -m tools.generate_release_bindings --root &quot;$(ClientProfileRoot).&quot; --output &quot;$(_ClientProfileOutput)&quot; $(_ClientProfileArgument)" />
+    <ItemGroup>
+      <Compile Include="$(_ClientProfileOutput)" />
+      <FileWrites Include="$(_ClientProfileOutput)" />
+    </ItemGroup>
+  </Target>
+</Project>

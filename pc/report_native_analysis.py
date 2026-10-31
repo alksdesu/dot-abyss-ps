@@ -11,6 +11,7 @@ from pathlib import Path
 import msgpack
 
 from dotabyss_ps.gameplay_catalog import JST, available
+from dotabyss_ps.release_manifest import default_data_dir, default_release, default_schema_path
 
 DOMAINS = {
     "角色与养成": "character interaction level-synchro",
@@ -87,8 +88,8 @@ def build(project, root, capture):
               for name, rows in grouped.items()]
 
     content = load(project / "artifacts/pc-content/index.json")
-    schema = load(project / "artifacts/master-schema-pc-1.15.0.json")
-    blob = project / "data-pc-1.15.0/master/blobs" / (content["source_master_sha256"] + ".msgpack")
+    schema = load(default_schema_path(project))
+    blob = default_data_dir(project) / "master/blobs" / (content["source_master_sha256"] + ".msgpack")
     if hashlib.sha256(blob.read_bytes()).hexdigest() != content["source_master_sha256"]:
         raise ValueError("Master fingerprint mismatch")
     data = msgpack.unpackb(blob.read_bytes(), raw=False)
@@ -165,7 +166,8 @@ def main():
     parser.add_argument("--analysis", type=Path)
     parser.add_argument("--capture", type=Path)
     args = parser.parse_args()
-    root = args.analysis or args.project / "artifacts/ida/pc-1.15.0"
+    build_profile = default_release(args.project)["build"]
+    root = args.analysis or args.project / "artifacts/ida" / ("pc-" + build_profile["application_version"])
     capture = args.capture or args.project / "captures/20261031-025842598-a3a7a9e5c32249308ff906a6c0089b4f"
     report = build(args.project, root, capture)
     (root / "analysis-report.md").write_text(markdown(report), encoding="utf-8")

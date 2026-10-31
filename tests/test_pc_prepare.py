@@ -113,7 +113,7 @@ def test_profile_seed_and_physical_context_are_verified(prepared_case):
     pc_prepare.write_json(destination / "local-client.json", manifest)
     (profile / "cache/catalog.bin").write_bytes(b"corrupt")
     with pytest.raises(ValueError, match="seed changed"):
-        pc_prepare.verify_client(destination, release)
+        pc_prepare.verify_client(destination, release, require_seeds=True)
 
 
 def test_interrupted_manifest_commit_can_resume(prepared_case):
@@ -148,12 +148,25 @@ def test_runtime_cache_eviction_does_not_invalidate_prepared_client(seeded_case,
 
 
 @pytest.mark.parametrize("seed_index", range(3))
-def test_present_runtime_seed_still_requires_original_content(seeded_case, seed_index):
+def test_runtime_seed_updates_only_affect_explicit_seed_verification(seeded_case, seed_index):
     _, destination, release, profile = seeded_case
     pc_prepare.prepare(*seeded_case)
     (profile / release["profile_seeds"][seed_index]["relative"]).write_bytes(b"changed")
+    assert pc_prepare.verify_client(destination, release)["release"] == release["release"]
     with pytest.raises(ValueError, match="seed changed"):
-        pc_prepare.verify_client(destination, release)
+        pc_prepare.verify_client(destination, release, require_seeds=True)
+
+
+def test_same_client_accepts_another_content_definition_without_rewriting_cache(seeded_case):
+    _, destination, release, profile = seeded_case
+    original = pc_prepare.prepare(*seeded_case)
+    changed = copy.deepcopy(release)
+    changed["profile_seeds"][0]["sha256"] = "a" * 64
+    before = {path: path.read_bytes() for path in profile.rglob("*") if path.is_file()}
+    assert pc_prepare.verify_client(destination, changed) == original
+    with pytest.raises(ValueError, match="seed changed"):
+        pc_prepare.verify_client(destination, changed, require_seeds=True)
+    assert all(path.read_bytes() == payload for path, payload in before.items())
 
 
 @pytest.mark.parametrize("relative", ("settings", "app.info"))
@@ -209,3 +222,32 @@ def test_initial_verification_requires_every_seed(seeded_case):
     (profile / release["profile_seeds"][0]["relative"]).unlink()
     with pytest.raises(FileNotFoundError):
         pc_prepare.verify_client(destination, release, require_seeds=True)
+
+
+@pytest.mark.parametrize("use_defaults", [False, True])
+def test_cli_uses_shared_defaults_or_explicit_legacy_release(prepared_case, monkeypatch, capsys, use_defaults):
+    source, destination, release, _ = prepared_case
+    pc_prepare.prepare(*prepared_case)
+    root = source.parent / "project"
+    monkeypatch.setattr(pc_prepare, "__file__", str(root / "pc/prepare_client.py"))
+    selected = []
+
+    def shared_release(project_root):
+        selected.append(("release", project_root))
+        return release
+
+    def shared_destination(project_root):
+        selected.append(("destination", project_root))
+        return destination
+
+    monkeypatch.setattr(pc_prepare, "load_local_release", shared_release)
+    monkeypatch.setattr(pc_prepare, "default_client_dir", shared_destination)
+    arguments = ["prepare_client.py", "--verify"]
+    if not use_defaults:
+        path = source.parent / "explicit-release.json"
+        path.write_text(json.dumps(release), encoding="utf-8")
+        arguments.extend(["--release", str(path), "--destination", str(destination)])
+    monkeypatch.setattr("sys.argv", arguments)
+    pc_prepare.main()
+    assert json.loads(capsys.readouterr().out)["root"] == str(destination)
+    assert selected == ([("release", root), ("destination", root)] if use_defaults else [])

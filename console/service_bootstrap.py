@@ -13,6 +13,7 @@ from urllib.parse import urlsplit
 from urllib.request import ProxyHandler, Request, build_opener
 
 from dotabyss_ps.process_lock import ProcessLockBusy, exclusive_process_lock
+from dotabyss_ps.release_manifest import default_schema_path
 
 from .client import AdminClient, ConsoleError, NoRedirect, read_token, service_origin
 
@@ -116,7 +117,10 @@ def ensure_service(origin, data_dir, *, project_root=None, timeout=30):
     if health(normalized) is not None:
         return {"origin": normalized, "started": False, "client": compatible_client(normalized, directory)}
     python = root / ".venv" / "Scripts" / "python.exe"
-    schema = root / "artifacts" / "master-schema-pc-1.15.0.json"
+    try:
+        schema = default_schema_path(root)
+    except (OSError, ValueError) as error:
+        raise ConsoleError("版本清单或主数据结构无效：" + str(error)) from error
     if not python.is_file() or not schema.is_file() or not (directory / "local.sqlite3").is_file():
         raise ConsoleError("缺少游戏服务环境、主数据结构或存档数据库，请检查项目和数据目录。")
     port = urlsplit(normalized).port

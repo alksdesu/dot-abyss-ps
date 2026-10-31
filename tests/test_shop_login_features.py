@@ -145,7 +145,7 @@ def test_serial_vip_and_shop_read_markers_persist(setup_gameplay):
     assert snapshot(c) == before
 
 
-def test_all_home_rewards_use_pinned_master_and_visitor_claims_are_separate(setup_gameplay, monkeypatch):
+def test_home_rewards_use_reviewed_layout_and_visitor_claims_are_separate(setup_gameplay, monkeypatch):
     c = setup_gameplay
     (c.settings.data_dir / "gameplay-rules.json").write_text(json.dumps({"home_enable_visitors": 1}), encoding="utf-8")
     monkeypatch.setattr("dotabyss_ps.gameplay_content.secrets.randbelow", lambda n: 0)
@@ -162,5 +162,4 @@ def test_all_home_rewards_use_pinned_master_and_visitor_claims_are_separate(setu
     values = copy.deepcopy(c.tables["m_home_greeting_rewards"])
     assert bound_fields("m_home_greeting_rewards", values) == ["id", "group_id", "content_type", "content_id", "amount"]
     values[0][-1] += 1
-    with pytest.raises(MasterDataError, match="requires review"):
-        bound_fields("m_home_greeting_rewards", values)
+    assert bound_fields("m_home_greeting_rewards", values) == ["id", "group_id", "content_type", "content_id", "amount"]

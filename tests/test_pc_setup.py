@@ -1,3 +1,4 @@
+import copy
 import hashlib
 import json
 import shutil
@@ -13,11 +14,15 @@ from dotabyss_ps.asset_index import PC_CATALOG_HASH_PATH, PC_CATALOG_PATH, REMOT
 from dotabyss_ps.assets import AssetCatalog, AssetDataError, UNITY_PROVIDER
 from dotabyss_ps.masterdata import MasterCatalog
 from dotabyss_ps.process_lock import ProcessLockBusy, exclusive_process_lock
+from dotabyss_ps.release_manifest import canonical_json, legacy_release
 from dotabyss_ps.storage import Store
 from pc import setup as module
 from pc.prepare_client import patch_settings, prepare
 from test_asset_index import CatalogFixture, fixture_catalog
 from test_assets import cri_payload, unity_payload
+
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def write(path, payload):
@@ -38,13 +43,15 @@ def setup_case(tmp_path, monkeypatch):
     write(source / "settings", settings)
     write(source / "app.info", b"original\n")
     write(source / "game.exe", b"test executable, never launched")
+    write(source / "GameAssembly.dll", b"test native module")
+    write(source / "UnityPlayer.dll", b"test engine")
     metadata = write(source / "game_Data/il2cpp_data/Metadata/global-metadata.dat", b"test metadata")
-    client = {"package": "dotabyss_x_cl", "version": "1.15.0", "metadata_sha256": hashlib.sha256(metadata.read_bytes()).hexdigest()}
+    client = {"package": "dotabyss_x_cl", "version": "8.4.2", "metadata_sha256": hashlib.sha256(metadata.read_bytes()).hexdigest()}
     monkeypatch.setattr(asset_module, "SUPPORTED_CLIENTS", (*asset_module.SUPPORTED_CLIENTS, client))
     schema = {"schema_version": 1, "client": client, "tables": {"m_items": [{"name": "id", "type": "long"}]}}
-    write(root / "artifacts/master-schema-pc-1.15.0.json", json.dumps(schema).encode())
+    schema_path = write(root / "artifacts/fixture-layout.json", json.dumps(schema).encode())
     release = {
-        "release": "synthetic-pc-1.15.0", "launcher_product_id": "dotabyss_x_cl", "application_version": "1.15.0",
+        "release": "synthetic-pc-build", "launcher_product_id": "dotabyss_x_cl", "application_version": client["version"],
         "executable": "game.exe", "app_info": "app.info", "identity": {"company": "LocalGames", "product": "DotAbyssLocalPlayer"},
         "settings": {"path": "settings", "sha256": hashlib.sha256(settings).hexdigest(),
                      "string_changes": [{"offset": 0, "before": "EXNOA LLC.", "after": "LocalGames"}], "integer_changes": []},
@@ -62,15 +69,30 @@ def setup_case(tmp_path, monkeypatch):
         for path, relative in ((catalog, "com.unity.addressables/1791059991.bin"),
                                (catalog_hash, "com.unity.addressables/1791059991.hash"),
                                (master, "DownloadCache/master.dat"))]
-    release_path = write(root / "pc/releases/pc-1.15.0.example.json", json.dumps(release).encode())
+    baseline = json.loads((ROOT / "pc/releases/manifest.json").read_text(encoding="utf-8"))
+    release_profile = copy.deepcopy(baseline["releases"][baseline["default_release"]])
+    release_profile["build"].update({key: value for key, value in release.items() if key != "profile_seeds"})
+    release_profile["build"]["schema"] = {"path": schema_path.relative_to(root).as_posix(),
+                                           "sha256": hashlib.sha256(canonical_json(schema)).hexdigest()}
+    release_profile["build"]["proxy"]["unity_player_sha256"] = release["source_fingerprints"]["UnityPlayer.dll"]
+    release_profile["content"] = {"profile_seeds": release["profile_seeds"], "catalog_version_hash": "c" * 32}
+    release_profile["paths"] = {"client_directory": "../dotabyss_pc/local-client", "data_directory": "data-test-release",
+                                "local_release": "pc/releases/fixture-local.json", "legacy_projection": "pc/releases/fixture.example.json"}
+    manifest = {"format_version": 1, "default_release": release["release"], "releases": {release["release"]: release_profile},
+                "supported_clients": [client], "server_master_bindings": {}}
+    manifest_path = write(root / "pc/releases/manifest.json", json.dumps(manifest).encode())
+    release = legacy_release(release_profile)
+    release_path = write(root / release_profile["paths"]["legacy_projection"], json.dumps(release).encode())
     for record in build_index(catalog, catalog_hash)["records"]:
         name = "__data" if record["provider"] == UNITY_PROVIDER else record["relative_path"].rsplit("/", 1)[-1]
         folder = shared / record["cache_key"] / record["hash128"]
         write(folder / "__info", ("-1\n1793371989\n1\n" + name + "\n").encode())
         write(folder / name, unity_payload() if record["provider"] == UNITY_PROVIDER else cri_payload())
     return SimpleNamespace(root=root, source=source, cache=cache, shared=shared, release=release, release_path=release_path,
+                           manifest=manifest, manifest_path=manifest_path, release_profile=release_profile, schema=schema,
+                           schema_path=schema_path, local_release_path=root / release_profile["paths"]["local_release"],
                            profile=profile, catalog=catalog, catalog_hash=catalog_hash, master=master,
-                           client=root.parent / "dotabyss_pc/local-client", data=root / "data-pc-1.15.0")
+                           client=root.parent / "dotabyss_pc/local-client", data=root / release_profile["paths"]["data_directory"])
 
 
 def inspect(case):
@@ -111,7 +133,7 @@ def test_inspection_discovers_packaged_cache_and_game_data_caches_without_writes
     assert result["release"]["profile_seeds"][0]["source"] == str(c.catalog)
     assert len(result["index"]["records"]) == 2
     assert not c.client.exists() and not c.data.exists()
-    assert not c.release_path.with_name("pc-1.15.0.json").exists()
+    assert not c.local_release_path.exists()
 
 
 def test_check_mode_is_read_only(setup_case):
@@ -120,6 +142,23 @@ def test_check_mode_is_read_only(setup_case):
     assert result["checked_inputs_only"] and result["indexed_count"] == 2
     assert not c.client.exists() and not c.data.exists()
     assert not c.profile.exists()
+
+
+def test_setup_uses_selected_transport_prefix_and_catalog_filenames(setup_case):
+    c = setup_case
+    prefix = "resources/newpc/local/current/catalog"
+    transport = c.release_profile["build"]["transport"]
+    transport.update(resource_root="/resources/newpc/local/", catalog_prefix=prefix, catalog_path=prefix + "/client-catalog.bin",
+                     catalog_hash_path=prefix + "/client-catalog.hash", remote_base="https://selected.invalid/" + prefix)
+    c.manifest_path.write_text(json.dumps(c.manifest), encoding="utf-8")
+    inputs = inspect(c)
+    assert inputs["index"]["binding"]["remote_base"] == transport["remote_base"]
+    assert all(row["relative_path"].startswith(prefix + "/") for row in inputs["index"]["records"])
+    imported = import_assets(c, inputs)
+    assets = AssetCatalog(c.data, Store(c.data / "local.sqlite3"), release_profile=c.release_profile)
+    assert imported["assets"]["catalog_served"]
+    assert assets.read(transport["catalog_path"])[1] == c.catalog.read_bytes()
+    assert assets.read(transport["catalog_hash_path"])[1] == c.catalog_hash.read_bytes()
 
 
 def test_initialization_shares_client_lock_across_checkouts(setup_case):
@@ -138,7 +177,7 @@ def test_first_initialization_prepares_client_and_imports_resources(setup_case):
     assert (c.client / "app.info").read_bytes() == b"LocalGames\nDotAbyssLocalPlayer\n"
     assert (c.source / "app.info").read_bytes() == b"original\n"
     assert (c.profile / "com.unity.addressables/1791059991.bin").read_bytes() == c.catalog.read_bytes()
-    assert c.release_path.with_name("pc-1.15.0.json").is_file()
+    assert c.local_release_path.is_file()
 
 
 def test_prepared_client_reinitialization_installs_plugin_and_preserves_saves(setup_case, monkeypatch):
