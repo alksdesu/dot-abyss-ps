@@ -181,6 +181,8 @@ def recommend_view(game):
         if not payments:
             continue
         count = sum(count_entry(game, p)["count"] for p in payments)
+        if definition["recommend_type"] == 1 and count >= 1:
+            continue
         result.append({"m_payment_recommend_id": definition["id"], "purchase_count": count, "end_at": data["released"][str(definition["id"])],
                        "is_new": int(definition["id"] not in data["read_recommends"])})
     return result
@@ -228,6 +230,12 @@ def listing(game, body):
 def purchase(game, identifier):
     from .gameplay_idle import reconcile
 
+    payment = game.catalog.get("m_payments", number(identifier))
+    if payment["payment_type"] == 2:
+        definition = game.catalog.get("m_payment_recommends", payment["master_id"])
+        if definition["recommend_type"] == 1 and count_entry(game, payment)["count"] >= 1:
+            platform_product(game, payment, required=True)
+            return {"received_items": [], "exec_response": None}
     payment, definition, product, counter = validate_purchase(game, identifier)
     if not payment["is_free"] and not game.rules["local_paid_shop_enabled"]:
         raise GameplayError("Local simulated purchases are disabled")
