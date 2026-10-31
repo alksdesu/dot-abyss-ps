@@ -75,6 +75,8 @@ D:\dot\
 
 如果原版目录已经移走，可以不传 `-Source`，改为明确提供 `-CacheDirectory` 和 `-SharedDirectory`；此时必须已经有准备好的本地客户端。不要把 `-Source` 指向 `local-client`。
 
+如果旧服务在 `terms/fetch`、`api/terms/fetch-agreements` 或 `version` 返回 4040，请更新服务端并重启。这些启动接口已经内置，不需要复制其他玩家的 fixtures。本地条款目录为空，不会伪造接受官方协议的记录。
+
 ## catalog 名称与请求路径
 
 本地 `1791059991.bin` 或 `catalogcached.bin` 是缓存来源名称。对当前 PC 版本，生成器保留文件内容，并在资源 manifest 中建立映射：

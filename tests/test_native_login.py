@@ -129,7 +129,7 @@ def test_native_login_alias_has_identical_authentication_contract(setup, alias):
         assert client.post(alias, json={}).status_code == 401
         assert client.post(alias, json={}, headers=headers).json()["contents"] == login["contents"]
         assert client.post("/login", json={}, headers=headers).json()["contents"] == login["contents"]
-    assert sum(route.path == "/login" for route in app.routes) == 1
+    assert sum(getattr(route, "path", None) == "/login" for route in app.routes) == 1
 
 
 def test_native_login_does_not_mark_missing_bootstrap_ready(setup):

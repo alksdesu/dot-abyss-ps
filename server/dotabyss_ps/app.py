@@ -25,6 +25,12 @@ from .admin_routes import install_admin
 
 MAX_BODY_BYTES = 2 * 1024 * 1024
 BOOTSTRAP_ROUTES = ("api/user", "api/home", "api/mypage/login")
+BUILTIN_BOOTSTRAP_METHODS = {
+    "terms/fetch": "GET",
+    "api/terms/fetch-agreements": "GET",
+    "api/terms/agree": "POST",
+    "version": "GET",
+}
 RUNTIME_KEYS = {"application_version", "app_version_code", "bundle_version", "server_version", "resource_version"}
 
 
@@ -104,7 +110,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     for directory in (settings.data_dir, settings.fixtures_dir, settings.resources_dir):
         directory.mkdir(parents=True, exist_ok=True)
     if settings.login_path:
-        if not settings.login_path.startswith("/") or settings.login_path.startswith(("/local", "/admin", "/console", "/diagnostics", "/healthz", "/resources", "/master", "/data")) or settings.login_path.lstrip("/") in (*BOOTSTRAP_ROUTES, "api/health-check", "maintenance") or is_gameplay_path(settings.login_path.lstrip("/")):
+        if not settings.login_path.startswith("/") or settings.login_path.startswith(("/local", "/admin", "/console", "/diagnostics", "/healthz", "/resources", "/master", "/data")) or settings.login_path.lstrip("/") in (*BOOTSTRAP_ROUTES, *BUILTIN_BOOTSTRAP_METHODS, "api/health-check", "maintenance") or is_gameplay_path(settings.login_path.lstrip("/")):
             raise ValueError("Login alias must be a non-reserved absolute path")
         try:
             contained_path(settings.data_dir, settings.login_path[1:])
@@ -207,7 +213,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "runtime_registered": bool(runtime.get("application_version") and runtime.get("app_version_code") and runtime.get("bundle_version")),
             "login_alias": settings.login_path,
             "fixtures": fixtures,
-            "route_sources": {"/" + route: "persistent_local_state" if local_state and route in STATE_ROUTES else "fixture" for route in BOOTSTRAP_ROUTES},
+            "route_sources": {
+                **{"/" + route: "persistent_local_state" if local_state and route in STATE_ROUTES else "fixture" for route in BOOTSTRAP_ROUTES},
+                **{"/" + route: "builtin" for route in BUILTIN_BOOTSTRAP_METHODS},
+            },
             "resource_files": sum(1 for file in settings.resources_dir.rglob("*") if file.is_file()),
             "observations": store.observations(),
             "client_events": store.events(),
@@ -337,6 +346,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         identity = store.authenticate(session, api_token)
         if identity is None:
             raise RequestFailure(401, 4010, "A valid local session is required")
+        if path in BUILTIN_BOOTSTRAP_METHODS:
+            if request.method != BUILTIN_BOOTSTRAP_METHODS[path]:
+                raise RequestFailure(405, 4050, "Method is not supported for this endpoint")
+            if path == "api/terms/agree":
+                if not api_token:
+                    raise RequestFailure(401, 4010, "A valid local session and API token are required")
+                if set(body) != {"terms_agreements"} or body["terms_agreements"] != []:
+                    raise RequestFailure(400, 4006, "No local terms are offered; terms_agreements must be an empty array")
+            if path == "terms/fetch":
+                contents = {"s_terms_versions": []}
+            elif path == "version":
+                contents = {}
+            else:
+                contents = {"t_terms_agreements": []}
+            return game_response(request, contents, token=api_token, profile_id=identity["user_id"])
         if local_state and is_gameplay_path(path):
             if not session or not api_token:
                 raise RequestFailure(401, 4010, "A valid local session and API token are required")
