@@ -4,11 +4,11 @@
 
 ## 客户端与版本绑定
 
-当前完整玩法面向 `dotabyss_x_cl` PC 1.15.0。初始化器还保留 `com.exnoa.abyss` 1.15.0 和 `jp.co.fanzagames.dotabyss_x_a.mod` 1.14.4 的基础协议兼容；这不表示 Android 已具备相同的完整玩法和启动流程。
+当前主要玩法面向 PC 客户端，初始化器另保留 Android 的基础协议兼容。具体客户端、版本及支持边界见 [适配记录](../changelog.md#客户端支持)；Android 不具备与 PC 相同的完整玩法和启动流程。
 
 每个支持项同时绑定包名、版本和元数据 SHA-256，具体值由 [newgame.py](../server/dotabyss_ps/newgame.py) 的 `SUPPORTED_CLIENTS` 定义。主数据、结构描述和存档必须匹配同一客户端与主数据版本，不能互换 PC、Google Play 和 FANZA 数据。不同客户端应使用独立的数据目录和服务端口。
 
-当前存档策略为 `policy_version = 5`，数据库 `game_states.schema_version` 仍为 `1`。前者表示初始化及兼容规则，后者表示数据库记录格式，两者不能互相替代。
+`policy_version` 表示初始化及兼容规则，`game_states.schema_version` 表示数据库记录格式，两者不能互相替代。当前值和迁移历史集中在 [存档策略记录](../changelog.md#存档策略记录)。
 
 ## 新档与教程
 
@@ -60,32 +60,25 @@
 
 ## 旧存档策略迁移
 
-只有遇到旧策略版本时才需要迁移；正常新建的策略 `5` 存档不需要执行。迁移前退出游戏并停止服务。`--profile` 使用存档内部标识，例如 `pc-default` 或 `local-...`，不是控制台显示名称。
+只有遇到旧策略版本时才需要迁移；按当前策略正常新建的存档不需要执行。迁移前退出游戏并停止服务。`--profile` 使用存档内部标识，例如 `pc-default` 或 `local-...`，不是控制台显示名称。
 
-先预览，再以相同参数加 `--apply` 执行：
+先在项目根目录的 PowerShell 中执行 [维护命令参数](../changelog.md#维护命令参数) 的变量块，将 `$dataDirectory` 核对为目标存档所在目录。随后在同一窗口预览，再以相同参数加 `--apply` 执行：
 
 ```powershell
-.\.venv\Scripts\python.exe -m dotabyss_ps.migrations --data-dir .\data-pc-1.15.0 --profile '<内部存档标识>' --schema .\artifacts\master-schema-pc-1.15.0.json
-.\.venv\Scripts\python.exe -m dotabyss_ps.migrations --data-dir .\data-pc-1.15.0 --profile '<内部存档标识>' --schema .\artifacts\master-schema-pc-1.15.0.json --apply
+.\.venv\Scripts\python.exe -m dotabyss_ps.migrations --data-dir $dataDirectory --profile '<内部存档标识>' --schema $schemaPath
+.\.venv\Scripts\python.exe -m dotabyss_ps.migrations --data-dir $dataDirectory --profile '<内部存档标识>' --schema $schemaPath --apply
 ```
 
-| 迁移 | 处理内容 |
-| --- | --- |
-| `1 → 2` | 缺少序章记录时补入完成状态 `99`，保留有效的原进度 |
-| `2 → 3` | 仅在缺失时补入未开始的酒馆记录 |
-| `3 → 4` | 仅在缺失时补入未派遣的探索队记录 |
-| `4 → 5` | 根据连续的计划奖励回执，将旧的“下一步”改为“已完成步数”，同时修正缓存响应中的对应记录 |
-
-默认目标为策略 `5`。跨入策略 `5` 必须提供与激活主数据匹配的 `--schema`；主表缺失、领奖回执不连续或旧值冲突会中止迁移。`--to-policy 2`、`3`、`4` 保留较早目标，不能降级或跳到未注册的版本。
+默认迁移到当前策略，具体步骤和可选目标见 [存档策略记录](../changelog.md#存档策略记录)。涉及计划进度语义修复时，必须提供与激活主数据匹配的 `--schema`；主表缺失、领奖回执不连续或旧值冲突会中止迁移。`--to-policy` 只接受已注册目标，不能降级或跳到未知版本。
 
 执行前会在数据目录的 `migration-backups/` 写入原始记录及内容哈希；计划迁移还包含原始 `gameplay_progress`。链式升级及两类记录的修改在同一事务中提交，失败回滚并保留备份。同一迁移重复执行不再修改存档，已有冲突备份不会被覆盖；其他档案、余额、库存和版本绑定不变。完成后重新启动服务。
 
 ## 旧编队空位清理
 
-空编队位置不应创建 `t_exploration_party_characters` 记录。较早存档如果留下角色 ID 为零的占位行，可以单独预览清理：
+空编队位置不应创建 `t_exploration_party_characters` 记录。较早存档如果留下角色 ID 为零的占位行，可以单独预览清理。先按上节初始化并核对 `$dataDirectory`，再执行：
 
 ```powershell
-.\.venv\Scripts\python.exe -m dotabyss_ps.party_migration --data-dir .\data-pc-1.15.0 --profile '<内部存档标识>'
+.\.venv\Scripts\python.exe -m dotabyss_ps.party_migration --data-dir $dataDirectory --profile '<内部存档标识>'
 ```
 
 确认预览后加 `--apply`。工具会备份并同时清理存档与缓存响应，保留有效队员、装备和已有记录 ID 的保留范围；仍引用装备的空行会被拒绝。此操作不改变策略版本，也不发放奖励。

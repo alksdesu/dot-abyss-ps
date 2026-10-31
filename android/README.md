@@ -1,6 +1,6 @@
 # Android 本地协议适配器
 
-该插件针对本目录来源 APK 的 Android ARM64 Unity IL2CPP 环境构建，依赖其已有 LemonLoader / MelonLoader 0.7.4、.NET 10/11 及 interop 程序集。它是本地协议诊断适配器，当前正常游戏流程先被缺失的 Android catalog/资源阻塞，尚未到达自然登录或主页。
+该插件针对来源 APK 的 Android ARM64 Unity IL2CPP 环境构建，依赖其已有 LemonLoader / MelonLoader、.NET 及 interop 程序集；具体基线见[历史诊断记录](../changelog.md#历史诊断记录)。它是本地协议诊断适配器，当前正常游戏流程先被缺失的 Android catalog/资源阻塞，尚未到达自然登录或主页。
 
 ## 已实现
 
@@ -24,7 +24,7 @@
 
 适配器不调用平台完整性缓存保存或 UUID 验证同步。取消在网络前后检查；握手、状态写入或原生调用失败均返回失败 UniTask，不回退平台登录。`native_login_completed` 只表示这个替换函数已准备结果，后续主数据、资源与主页仍须分别验证。
 
-已在 MuMu 验证：实验性远跳板开启后，GetApiUrl prefix 实际执行并返回本地地址；独立 .NET HTTP 完成本地会话、设备版本登记和诊断上报；实际 UnityIap 初始化入口被替换；Unity 原生业务请求收到本地 maintenance HTTP 200/Success，并通过客户端版本校验。设备读取的 app_version_code=`1`、bundle_version=`0.1.0`、Unity Application.version=`1.14.4` 是不同字段，客户端版本数组应匹配最后一项。原生 ARM64 真机尚未测试。
+已在 MuMu 验证：实验性远跳板开启后，GetApiUrl prefix 实际执行并返回本地地址；独立 .NET HTTP 完成本地会话、设备版本登记和诊断上报；实际 UnityIap 初始化入口被替换；Unity 原生业务请求收到本地 maintenance HTTP 200/Success，并通过客户端版本校验。设备读取的 `app_version_code`、`bundle_version`、`Unity Application.version` 是不同字段，客户端版本数组应匹配最后一项，实际取值见[历史诊断记录](../changelog.md#历史诊断记录)。原生 ARM64 真机尚未测试。
 
 当前缺少匹配的 Android catalog hash/bin 与资源缓存，正常流程尚未进入 LoginDmmAndroidAsync；Windows 离线项目的资源不能据此当成 Android 资源。候选主数据另行保留，独立登录诊断不导入主数据、不写 master/resource 版本、不绕过资源加载。完整登录与主页仍未验收。
 
@@ -54,7 +54,7 @@
 
 探针分别记录新建 tuple、旧泛型构造候选、字段复制后的 task.result、跨钩子返回的 task.result、awaiter 内部 task.result 与最终 GetResult 的匹配标志。旧候选仅用于比较，不被返回；非空字符串指针若不匹配最初 tuple 的已知指针，不会解引用，只报告未检查。日志只含 long 是否匹配/为零、string 是否匹配/为 null、长度与日期可解析性等特征，不输出具体值或指针地址。修复路径所有阶段必须匹配，不能用最后一步掩盖中间失配；仍待新的同次设备验证。
 
-最新实机结论仍是 `native-login-fixed.log`：`0L` 修复后已进入 prefix，UUID 缓存和 Prefs 检查为 true，已读取 awaiter 结果，但 `tuple_matches=false`、`passed=false`。新的 `(source:null, token:0)` 加 result 字段复制版本仅完成源码构建与 Release/Debug 各 55 项托管检查，尚未部署到设备，不能标为原生登录通过。对应 DLL SHA256：`19AE81011D58797ED898E0BA7B5F2D9DD2F785424743677DA5D07180A5A2D452`。
+最新实机结论仍是 `native-login-fixed.log`：`0L` 修复后已进入 prefix，UUID 缓存和 Prefs 检查为 true，已读取 awaiter 结果，但 `tuple_matches=false`、`passed=false`。新的 `(source:null, token:0)` 加 result 字段复制版本仅完成源码构建与 Release/Debug 托管检查，尚未部署到设备，不能标为原生登录通过。该次构建指纹和检查结果见[历史诊断记录](../changelog.md#历史诊断记录)。
 
 ## 构建
 
@@ -80,7 +80,7 @@
 pwsh -File .\android\build.ps1
 ```
 
-需要 .NET SDK 10 与默认位置 `..\..\dotabyss_unpacked` 的 APK 解包文件；可用 `-GameRoot` 指定其他解包目录。构建结果在 `android/dist/DotAbyss.Local.dll`，不复制游戏或加载器 DLL，也不修改 APK。
+按[运行与构建环境](../changelog.md#运行与构建环境)准备 .NET SDK，以及默认位置 `..\..\dotabyss_unpacked` 的 APK 解包文件；可用 `-GameRoot` 指定其他解包目录。构建结果在 `android/dist/DotAbyss.Local.dll`，不复制游戏或加载器 DLL，也不修改 APK。
 
 ## 安装与诊断
 

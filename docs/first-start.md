@@ -2,7 +2,7 @@
 
 [文档目录](README.md) · [启动器与控制台](../console/README.md)
 
-适用于 Windows 和 PC 1.15.0。准备 Python 3.11+、.NET SDK，以及匹配版本的游戏和已下载资源。命令在仓库根目录执行；示例中的 `D:\dot\dotabyss_x_cl` 换成自己的原版游戏目录。
+适用于 Windows PC 客户端。按 [适配记录](../changelog.md) 准备匹配的游戏、已下载资源、Python 和 .NET SDK。命令在仓库根目录执行；示例中的 `D:\dot\dotabyss_x_cl` 换成自己的原版游戏目录。
 
 ## 1. 初始化客户端和资源
 
@@ -20,7 +20,7 @@
 
 无需复制或编辑 `pc/config.json`、替换 `YourName`、手抄 revision，也无需自己制作 `resource-url-index.json`。插件使用的 `pc-local.json` 会在启动器第一次启动游戏时自动创建；服务地址和存档标识随所选存档写入。
 
-资源索引和缺失清单保存在 `data-pc-1.15.0/setup/`。脚本不会创建角色存档、重置已有存档或自动迁移到另一主数据版本。
+资源索引和缺失清单保存在所选数据目录的 `setup/` 中，默认目录见 [维护命令参数](../changelog.md#维护命令参数)。脚本不会创建角色存档、重置已有存档或自动迁移到另一主数据版本。
 
 ### 缓存位置
 
@@ -50,7 +50,7 @@ D:\dot\
 
 ## 2. 首次准备加载器
 
-如果脚本返回 `ready: false` 并提示缺少 interop，请在生成的 `dotabyss_pc/local-client` 中安装 BepInEx 6 IL2CPP Windows x64。已验证环境为 `6.0.0-be.791+b782da4`，可从 [BepInEx 构建页](https://builds.bepinex.dev/projects/bepinex_be/791)获取对应包；完整环境和两个运行库补丁的核对方法见[兼容说明](../third_party/Il2CppInterop/COMPATIBILITY.md)。
+如果脚本返回 `ready: false` 并提示缺少 interop，请在生成的 `dotabyss_pc/local-client` 中安装 BepInEx IL2CPP Windows x64。已验证的构建号与下载入口见 [运行与构建环境](../changelog.md#运行与构建环境)；两个运行库补丁的核对方法见 [兼容说明](../third_party/Il2CppInterop/COMPATIBILITY.md)。
 
 解压后，加载器文件应与 `ドットアビスX.exe` 同级。启动该副本一次，让 BepInEx 生成 `BepInEx/interop/Project.dll`，随后退出游戏。不需要登录原版账号，也不要在这一步创建正式存档。首次生成的诊断日志是 `BepInEx/LogOutput.log`。
 
@@ -60,12 +60,12 @@ D:\dot\
 
 ```powershell
 .\setup-pc.ps1 -PluginOnly
-.\start-console.ps1 -Port 18083 -DataDirectory '.\data-pc-1.15.0'
+.\start-console.ps1 -Port 18083
 ```
 
-插件直接引用客户端现有的 core 和 interop 编译，不需要把 BepInEx 再复制到 `toolchain/runtime`。安装前必须退出游戏；已有插件会备份到 `artifacts/setup/`。没有改变时不重复生成备份。
+插件直接引用客户端现有的 core 和 interop 编译，结构常量从统一版本清单自动生成，不需要把 BepInEx 再复制到 `toolchain/runtime`。安装前必须退出游戏；已有插件会备份到 `artifacts/setup/`。构建输入与已安装 DLL 的指纹均未变化时跳过编译；仅更新游戏内容不会使构建记录失效。没有改变时不重复生成备份。
 
-启动器打开后，点击“启动服务”，新建或选择存档，再点击“启动游戏”。使用上述明确的数据目录可以避免之前保存的控制台设置指向其他环境。
+启动器打开后，点击“启动服务”，新建或选择存档，再点击“启动游戏”。未显式指定数据目录时可能沿用已有启动器设置，首次使用才采用默认目录。若指向其他环境，先按 [维护命令参数](../changelog.md#维护命令参数) 核对 `$dataDirectory`，再加 `-DataDirectory $dataDirectory` 重新打开。
 
 繁体翻译可通过启动器的“一键安装”配置，来源及许可见[翻译说明](../pc-translation/README.md)。
 
@@ -79,12 +79,7 @@ D:\dot\
 
 ## catalog 名称与请求路径
 
-本地 `1791059991.bin` 或 `catalogcached.bin` 是缓存来源名称。对当前 PC 版本，生成器保留文件内容，并在资源 manifest 中建立映射：
-
-| 内容 | 本机服务的请求路径 |
-| --- | --- |
-| catalog 原始字节 | `/resources/windows/r18/aas/0.1.0/aa/catalog_1.bin` |
-| catalog 配套 hash 原始字节 | `/resources/windows/r18/aas/0.1.0/aa/catalog_1.hash` |
+本地数字编号的 `.bin` 或 `catalogcached.bin` 是缓存来源名称，不是客户端请求路径。生成器保留 catalog 与配套 hash 的原始字节，在资源 manifest 中分别绑定到该客户端要求的固定路径；当前值见 [维护命令参数](../changelog.md#维护命令参数)。初始化脚本会完成映射，无需手动改文件名。
 
 资源条目的 `cache_key`、Hash128、provider 和长度从 catalog 的结构字段读取，定位到缓存目录下的 `<cache_key>/<Hash128>/__info` 及其声明文件。Hash128 不当作文件 MD5 使用，文件内容另做 SHA-256 校验。
 

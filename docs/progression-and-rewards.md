@@ -2,7 +2,7 @@
 
 [文档目录](README.md) · [控制台操作](../console/README.md)
 
-本篇说明 PC 1.15.0 的常驻行为与本地规则。主线流程见[主线战斗与教程](main-story-battle.md)，活动玩法见[活动与本地复刻](events-and-reruns.md)。
+本篇说明已适配 PC 客户端的常驻行为与本地规则，具体版本见 [适配记录](../changelog.md)。主线流程见[主线战斗与教程](main-story-battle.md)，活动玩法见[活动与本地复刻](events-and-reruns.md)。
 
 ## 任务批量操作
 

@@ -1,6 +1,6 @@
 # dot-abyss-ps
 
-《ドットアビスX》PC 版的本地服务端、客户端适配插件与管理启动器，当前适配 **1.15.0**。
+《ドットアビスX》PC 版的本地服务端、客户端适配插件与管理启动器。适配版本、运行环境与更新日期见 [changelog](changelog.md)。
 
 - 常驻养成、主线剧情与教程、战斗模式、活动及本地复刻。
 - 多存档管理、数据编辑、备份恢复与客户端同步。
@@ -12,7 +12,7 @@
 
 ## 使用
 
-需要 Windows、Python 3.11+、.NET SDK，以及匹配的 PC 1.15.0 客户端和已下载资源。游戏加载器使用 BepInEx 6 IL2CPP x64。
+需要 Windows、Python、.NET SDK，以及匹配的 PC 客户端和已下载资源。游戏加载器使用 BepInEx IL2CPP x64，具体版本按 [运行与构建环境](changelog.md#运行与构建环境) 准备。
 
 ```powershell
 .\setup-pc.ps1 -Source 'D:\dot\dotabyss_x_cl'
@@ -22,12 +22,15 @@
 
 准备完成后，双击 `start-console.cmd`，点击“启动服务”，选择或创建存档，再点击“启动游戏”。日常编辑、热更新和备份见[启动器与控制台](console/README.md)。
 
+版本、结构和资源绑定统一维护在 [版本清单](pc/releases/manifest.json)，各端自动读取或生成绑定。结构不变的内容更新可复用插件；适配与旧档边界见 [主数据维护](docs/masterdata.md#更新与回退)。
+
 ## 文档
 
 - [首次启动与缓存位置](docs/first-start.md)
 - [养成、奖励与解锁](docs/progression-and-rewards.md)
 - [主线与教程](docs/main-story-battle.md)、[其他战斗模式](docs/other-battle-modes.md)、[活动与复刻](docs/events-and-reruns.md)
 - [数据维护及完整目录](docs/README.md)
+- [适配记录](changelog.md)
 
 ## 运行库兼容补丁
 

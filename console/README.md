@@ -10,10 +10,10 @@
 
 PowerShell 手动启动的进程显示为“外部服务”，可以连接，但不能直接管理。先在原窗口按 Ctrl+C 停止一次，再从启动器启动即可。停止、重启会等待当前请求结束，并中断游戏连接，操作前请完成当前游戏动作。
 
-需要指定地址或数据目录时，在项目根目录运行：
+需要指定地址或数据目录时，先在项目根目录的 PowerShell 中执行 [维护命令参数](../changelog.md#维护命令参数) 的变量块；若已有自定义安装，将 `$dataDirectory` 换成其实际目录，再在同一窗口运行：
 
 ```powershell
-.\start-console.ps1 -Port 18083 -DataDirectory '.\data-pc-1.15.0'
+.\start-console.ps1 -Port 18083 -DataDirectory $dataDirectory
 ```
 
 连接参数保存到 `%LOCALAPPDATA%\DotAbyssConsole\settings.json`，下次沿用。服务已启动但控制台仍连接旧环境时，先检查这里的目录和端口。

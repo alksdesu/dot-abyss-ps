@@ -2,20 +2,22 @@
 
 [文档目录](README.md) · [主数据](masterdata.md)
 
-PC 1.15.0 首次部署优先使用 [PC 首次启动](first-start.md) 中的 `setup-pc.ps1`，自动完成索引生成与 catalog 请求路径映射。下文保留独立工具和导入接口，适用于检查缓存及维护现有环境。
+PC 首次部署优先使用 [PC 首次启动](first-start.md) 中的 `setup-pc.ps1`，自动完成索引生成与 catalog 请求路径映射。下文保留独立工具和导入接口，适用于检查缓存及维护现有环境。
 
 ## PC 索引生成
 
+先在项目根目录的 PowerShell 中执行 [维护命令参数](../changelog.md#维护命令参数) 的变量块，再在同一窗口执行以下命令。将两个文件参数替换成缓存中实际配对的 catalog 与 hash；已有自定义安装应将 `$dataDirectory` 换成其实际目录。
+
 ```powershell
-.\.venv\Scripts\python.exe -m dotabyss_ps.asset_index --catalog '<缓存目录>/com.unity.addressables/1791059991.bin' --catalog-hash '<缓存目录>/com.unity.addressables/1791059991.hash' --output '.\artifacts\resource-url-index.json'
+.\.venv\Scripts\python.exe -m dotabyss_ps.asset_index --catalog '<实际 catalog 文件>' --catalog-hash '<实际 hash 文件>' --output '.\artifacts\resource-url-index.json'
 ```
 
-生成器按 Addressables 二进制 catalog v2 的结构解析引用、依赖和请求参数；格式依据 [Unity Addressables 2.7.4](https://download.packages.unity.com/com.unity.addressables/-/com.unity.addressables-2.7.4.tgz)。未知格式或损坏引用明确拒绝，不通过搜索文件名推测。默认 `remote_base` 使用保留的 `.invalid` 域名表达路径绑定，不请求该域名；本机插件负责将 origin 替换为当前本地服务。
+生成器按 Addressables 二进制 catalog 的结构解析引用、依赖和请求参数；格式版本与依据见 [运行与构建环境](../changelog.md#运行与构建环境)。未知格式或损坏引用明确拒绝，不通过搜索文件名推测。默认 `remote_base` 使用保留的 `.invalid` 域名表达路径绑定，不请求该域名；本机插件负责将 origin 替换为当前本地服务。
 
 单独导入 PC 资源时，两条固定映射必须一并提供：
 
 ```powershell
-.\.venv\Scripts\python.exe -m dotabyss_ps.assets --data-dir .\data-pc-1.15.0 stage --index .\artifacts\resource-url-index.json --catalog '<catalog文件>' --catalog-hash '<hash文件>' --cache-root '<游戏目录>/ドットアビスX_Data/Caches' --catalog-relative-path resources/windows/r18/aas/0.1.0/aa/catalog_1.bin --catalog-hash-relative-path resources/windows/r18/aas/0.1.0/aa/catalog_1.hash --source 'PC 本地缓存'
+.\.venv\Scripts\python.exe -m dotabyss_ps.assets --data-dir $dataDirectory stage --index .\artifacts\resource-url-index.json --catalog '<catalog文件>' --catalog-hash '<hash文件>' --cache-root '<游戏目录>/ドットアビスX_Data/Caches' --catalog-relative-path $catalogRelativePath --catalog-hash-relative-path $catalogHashRelativePath --source 'PC 本地缓存'
 ```
 
 `Caches` 和 `Shared` 是同类缓存桶结构的不同目录名；catalog 的本地缓存名不决定请求 URL。
@@ -27,15 +29,15 @@ PC 1.15.0 首次部署优先使用 [PC 首次启动](first-start.md) 中的 `set
 ## 暂存与激活
 
 ```powershell
-.\.venv\Scripts\python.exe -m dotabyss_ps.assets --data-dir .\data-pc-1.15.0 activate '<stage 返回的 assets 版本>'
-.\.venv\Scripts\python.exe -m dotabyss_ps.assets --data-dir .\data-pc-1.15.0 status
+.\.venv\Scripts\python.exe -m dotabyss_ps.assets --data-dir $dataDirectory activate '<stage 返回的 assets 版本>'
+.\.venv\Scripts\python.exe -m dotabyss_ps.assets --data-dir $dataDirectory status
 ```
 
 使用上一节 `stage` 返回的 revision，不照抄旧版本。自动初始化入口会完成暂存与激活，无需手抄。
 
 独立 `stage` 命令默认要求索引中全部远程文件存在；缺文件不会发布 manifest 或修改当前激活指针。明确添加 `--allow-partial` 可以暂存已验证文件，manifest 保留所有缺失路径和原因。部分集合可以显式激活，但缺失 URL 仍返回 404，不会由静态目录中的同名文件补充。`setup-pc.ps1` 会先保存缺失报告，只有显式指定 `-AllowPartial` 才激活不完整集合。
 
-catalog 与 hash 原始字节始终存入 blob。两个 `--catalog-*-path` 参数决定对外映射，PC 必须使用上一节已确认的固定路径。其他客户端需要各自的命名空间和原生契约，不能根据 `catalogcached.bin` 等本地名称推测。
+catalog 与 hash 原始字节始终存入 blob。两个 `--catalog-*-path` 参数决定对外映射，必须使用目标客户端适配记录中的路径。其他客户端需要各自的命名空间和原生契约，不能根据 `catalogcached.bin` 等本地名称推测。
 
 ## 缓存校验
 
