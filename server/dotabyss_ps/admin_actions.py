@@ -6,6 +6,7 @@ from .admin_actions_common import arguments, changed, field, no_battle, spec
 from .admin_actions_economy import OPERATIONS as ECONOMY
 from .admin_actions_growth import OPERATIONS as GROWTH
 from .admin_actions_modes import OPERATIONS as MODES
+from .admin_actions_missions import ACTIONS as MISSIONS
 from .admin_actions_progress import OPERATIONS as PROGRESS
 from .admin_display_references import CONTENT_TABLES, NOVEL_TABLES, reference_table
 from .gameplay_catalog import GAMEPLAY_TABLES, GameplayError
@@ -153,7 +154,7 @@ def route_specs(catalog=None):
 
 
 def action_specs(catalog=None):
-    values = copy.deepcopy([definition for definition, _ in (*GROWTH, *ECONOMY, *PROGRESS, *MODES)] + route_specs(catalog))
+    values = copy.deepcopy([definition for definition, _ in (*GROWTH, *ECONOMY, *PROGRESS, *MODES, *MISSIONS)] + route_specs(catalog))
     sources = {
         "skin.unlock": {"ids": {"character": "m_character_skins", "weapon": "m_weapon_skins"}},
         "novel.unlock": {"ids": {str(i): "m_novel_" + name for i, name in ((1, "mains"), (2, "events"), (3, "characters"), (4, "homes"), (5, "character_skins"), (6, "prologues"), (7, "others"))}},
@@ -191,7 +192,7 @@ def apply_action(game, action, args):
     from .newgame import validate_saved_state
     from .protocol import validate_data
 
-    definitions = {definition["id"]: (definition, handler) for definition, handler in (*GROWTH, *ECONOMY, *PROGRESS, *MODES)}
+    definitions = {definition["id"]: (definition, handler) for definition, handler in (*GROWTH, *ECONOMY, *PROGRESS, *MODES, *MISSIONS)}
     wrapped = {definition["id"]: definition for definition in route_specs(game.catalog)}
     if action in definitions:
         definition, handler = definitions[action]

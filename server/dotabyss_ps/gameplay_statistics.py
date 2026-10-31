@@ -5,6 +5,7 @@ import re
 
 from .gameplay_catalog import GameplayError, number
 from .gameplay_records import rows
+from .gameplay_mission_calendar import reset_day, statistics_days, validate_statistics_days, week_start
 
 TIME_SITUATIONS = {110200, 110201, 110202, 110500, 110600, 110700}
 
@@ -18,7 +19,7 @@ def bucket(progress):
     data = entry["data"]
     if not data:
         data.update(initialized=False, totals={}, days={})
-    if set(data) != {"initialized", "totals", "days"} or type(data["initialized"]) is not bool or not isinstance(data["totals"], dict) or not isinstance(data["days"], dict):
+    if set(data) - {"initialized", "totals", "days", "reset_days", "reset_started_at"} or not {"initialized", "totals", "days"} <= data.keys() or type(data["initialized"]) is not bool or not isinstance(data["totals"], dict) or not isinstance(data["days"], dict):
         raise GameplayError("Stored statistics are invalid")
     if len(data["days"]) > 400 or len(data["totals"]) > 10000:
         raise GameplayError("Stored statistics exceed their limit")
@@ -34,6 +35,7 @@ def bucket(progress):
             if not isinstance(key, str) or not re.fullmatch(r"[1-9][0-9]{0,8}:[0-9]{1,19}:[0-9]{1,19}", key):
                 raise GameplayError("Stored statistic key is invalid")
             number(value, 0, 2 ** 31 - 1)
+    validate_statistics_days(data, 2 ** 31 - 1)
     return data
 
 
@@ -45,11 +47,15 @@ def record(progress, now, situation, amount=1, target=0, sub=0, *, mode="add"):
     amount = number(amount, 0, 2 ** 31 - 1)
     data = bucket(progress)
     identity = key(situation, target, sub)
+    reset = statistics_days(data, now)
+    current = reset_day(now)
+    reset_today = reset.setdefault(current.isoformat(), {})
+    data["reset_days"] = {key: values for key, values in reset.items() if key >= (current - timedelta(days=399)).isoformat()}
     day = now.date().isoformat()
     today = data["days"].setdefault(day, {})
     cutoff = (now.date() - timedelta(days=399)).isoformat()
     data["days"] = {k: v for k, v in data["days"].items() if k >= cutoff}
-    for values in (data["totals"], today):
+    for values in (data["totals"], today, reset_today):
         old = values.get(identity)
         value = (old or 0) + amount if mode == "add" else max(old or 0, amount) if mode == "max" else min(old, amount) if old is not None else amount
         if mode not in ("add", "max", "min"):
@@ -81,12 +87,14 @@ def value(progress, now, mission, *, mode="add", start=None, data=None):
     identity = key(mission["situation_type"], mission.get("target_id", 0), mission.get("sub_target_id", 0))
     kind = mission["mission_type"]
     if kind in (2, 8):
-        return data["days"].get(now.date().isoformat(), {}).get(identity)
+        return statistics_days(data, now).get(reset_day(now).isoformat(), {}).get(identity)
     if kind in (3, 6):
-        start = max(start or date.min, now.date() - timedelta(days=now.weekday()))
+        start = max(start or date.min, week_start(now))
     if start is None:
         return data["totals"].get(identity)
-    values = [v[identity] for day, v in data["days"].items() if start <= date.fromisoformat(day) <= now.date() and identity in v]
+    daily = statistics_days(data, now) if kind in (3, 6) else data["days"]
+    end = reset_day(now) if kind in (3, 6) else now.date()
+    values = [v[identity] for day, v in daily.items() if start <= date.fromisoformat(day) <= end and identity in v]
     if not values:
         return None
     return sum(values) if mode == "add" else max(values) if mode == "max" else min(values)

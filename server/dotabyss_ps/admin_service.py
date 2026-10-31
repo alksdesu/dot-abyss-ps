@@ -39,6 +39,10 @@ TIME_SENSITIVE_ACTIONS = {
     "research.edit", "research.maximize", "story.complete", "equipment.edit", "equipment.enchantment",
     "equipment.appraisal_apply", "equipment.delete", "party.layout", "party.copy", "party.preset_load",
     "party.delete", "idle.party", "idle.assign", "profile.exp",
+    "mission.open_days", "mission.complete", "mission.claim", "mission.statistic", "event.statistic",
+    "mission.receive", "mission.plan_receive", "mission.special_receive", "mission.special_complete",
+    "mission.nether_receive", "mission.event_receive", "mission.pass_receive",
+    "shop.pass_rewards", "shop.pass_loop",
 }
 
 
@@ -290,10 +294,11 @@ class AdminService:
                 after = copy.deepcopy(current)
                 _, catalog = self.local._master_data(current["master_revision"])
                 game = Gameplay(after["state"], after["progress"], catalog, profile_id, rules=load_rules(self.rules_path))
-                apply_action(game, item["operation"], item["args"])
+                applied = apply_action(game, item["operation"], item["args"])
                 validate_saved_state(after["state"])
                 validate_data(after["progress"])
                 item = {**item, "before": current, "after": after,
+                        "summary": applied.get("summary", item["summary"]), "timing": applied.get("timing", item["timing"]),
                         "delta": record_delta(current["state"]["records"], after["state"]["records"])}
             if item["before"]["social"] != after["social"]:
                 old, new = item["before"]["social"], after["social"]
@@ -313,6 +318,19 @@ class AdminService:
                                            item["before"], after, item["delta"])
             version = self.load(db, profile_id)["version"]
             return {"version": version, "revision": revision, "status": "saved", "summary": item["summary"], "timing": item["timing"]}
+
+    def sync_snapshot(self, profile_id, after):
+        from .gameplay_mission_controls import project_special_records
+
+        with self.lock:
+            result = self.journal.sync(profile_id, after)
+            if result["pending"]:
+                with self.store.connection() as db:
+                    current = self.load(db, profile_id)
+                _, catalog = self.local._master_data(current["master_revision"])
+                game = Gameplay(current["state"], current["progress"], catalog, profile_id, rules=load_rules(self.rules_path))
+                result["records"] = project_special_records(game, result["records"])
+            return result
 
     def backup(self, profile_id, expected_version):
         with self.lock, self.store.connection() as db:

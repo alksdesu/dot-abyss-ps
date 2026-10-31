@@ -6,6 +6,8 @@ from datetime import date, datetime
 
 from .gameplay_catalog import GameplayError, JST, available, identifiers, number
 from .gameplay_missions import Missions
+from .gameplay_mission_calendar import prepare as prepare_mission_calendar
+from .gameplay_mission_controls import project_special_records
 from .gameplay_records import delta, find, grant, merge_changes, put, rows
 from .newgame import POLICY_VERSION, NewGameError, validate_saved_state
 from .protocol import validate_data
@@ -174,6 +176,7 @@ class Gameplay:
         if owners != {self.user_id}:
             raise GameStateError("Stored game state does not belong to the authenticated profile")
         prepare_progress(self.progress, self.now)
+        prepare_mission_calendar(self)
         apply_tutorial_policy(self)
         reconcile_comeback(self)
         prepare_story_state(self)
@@ -238,7 +241,11 @@ class Gameplay:
                 response["badges"].update(self._missions().badges())
             response["badges"]["present_count"] = pending_presents
         validate_data(response)
-        return response
+        return self.client_response(response)
+
+    def client_response(self, response):
+        records = project_special_records(self, response.get("records", {}))
+        return {**response, "records": records}
 
     def execute(self, route, method, body, operation_id=""):
         extra = match_route(route, EXTRA_ROUTES)
@@ -264,10 +271,17 @@ class Gameplay:
             previous = replay_battle_response(self, route, previous)
             previous = replay_side_story_response(self, route, previous)
             previous = replay_event_mission_response(self, route, previous)
+            if route == "api/special-mission/top":
+                previous.update(self.special_top(body))
+            elif route == "api/mission/list":
+                previous.update(self.mission_list(body))
+            elif extra and extra[0] in {"api/mission-pass/top", "api/nether-mission/list", "api/plan-mission/list/{0}", "api/visitor-mission/list/{0}"}:
+                _, entry, values = extra
+                previous.update(entry.handler(self, entry.arguments(body, values)))
             if expired:
                 merge_paid_expiry(previous, expired)
                 self.progress["operation_receipts"][operation_id]["response"] = copy.deepcopy(previous)
-            return previous
+            return self.client_response(previous)
         if "m_vip_ranks" in self.catalog.tables:
             ensure_vip_weekly_counters(self)
         settle_before_effect_change(self)
@@ -313,7 +327,7 @@ class Gameplay:
         validate_data(response)
         capture_payment_response(self, response, refresh_expiry=bool(expired))
         remember(self.progress, operation_id, digest, response)
-        return response
+        return self.client_response(response)
 
     def tutorial(self, body):
         return complete_feature_tutorial(self, body)

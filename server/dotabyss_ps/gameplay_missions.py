@@ -12,6 +12,8 @@ from .gameplay_delivery import deliver
 from .gameplay_character_levels import effective_character_level
 from .gameplay_story_state import is_quest_complete
 from .gameplay_comeback import special_window
+from .gameplay_mission_calendar import claim_period, login_days, prepare as prepare_calendar, reset_day, resolve_claim_key, week_start
+from .gameplay_mission_controls import completion_value, open_days
 
 COUNTER_SITUATIONS = {40300, 40400, 40500, 50000, 60000, 80000, 80002, 80003, 90000, 110000, 110001, 110002, 110003,
                      110004, 110005, 110300, 110400, 120000, 120001, 120002, 120003, 120004, 120005, 120007, 120013,
@@ -26,14 +28,14 @@ class Missions:
         self.state, self.progress, self.catalog, self.now, self.user_id = state, progress, catalog, now, user_id
         self.rules = load_rules() if rules is None else rules
         self.statistics = bucket(progress)
+        prepare_calendar(self)
         prepare_pass_statistics(self)
 
     def key(self, mission):
         if mission.get("m_mission_pass_id") and mission["mission_type"] in (5, 6):
             return pass_claim_key(mission, self.catalog.get("m_mission_passes", mission["m_mission_pass_id"]), self.now)
-        kind = mission["mission_type"]
-        period = self.now.date().isoformat() if kind in (2, 8) else self.now.date().strftime("%G-W%V") if kind in (3, 6) else "once"
-        return f"{period}:{mission['id']}"
+        period = claim_period(mission, self.now)
+        return resolve_claim_key(self, mission, f"{period}:{mission['id']}")
 
     def value(self, mission):
         situation = mission["situation_type"]
@@ -52,12 +54,13 @@ class Missions:
             reached = max((row["disaster_level_record_high"] for row in rows(self.state, "t_disaster_statuses")), default=0)
             return max(recorded, reached)
         if situation == 10000:
-            days = self.progress["login_days"]
+            days = login_days(self.progress, self.now)
+            today = reset_day(self.now)
             if mission["mission_type"] in (2, 8):
-                return int(self.now.date().isoformat() in days)
+                return int(today.isoformat() in days)
             if mission["mission_type"] in (3, 6):
-                monday = self.now.date() - timedelta(days=self.now.weekday())
-                return sum(monday <= date.fromisoformat(day) <= self.now.date() for day in days)
+                monday = week_start(self.now)
+                return sum(monday <= date.fromisoformat(day) <= today for day in days)
             return len(days)
         if situation == 10001:
             return 1
@@ -121,8 +124,12 @@ class Missions:
             return value if situation in TIME_SITUATIONS else value or 0
         return None
 
+    def effective_value(self, mission):
+        controlled = completion_value(self, mission)
+        return self.value(mission) if controlled is None else controlled
+
     def completed(self, mission):
-        value = self.value(mission)
+        value = self.effective_value(mission)
         return value is not None and (0 < value <= mission["require_value"] if mission["situation_type"] in TIME_SITUATIONS else value >= mission["require_value"])
 
     def active(self, mission):
@@ -136,7 +143,7 @@ class Missions:
         return not previous or self.key(self.catalog.get("m_missions", previous)) in self.progress["mission_claims"]
 
     def view(self, mission):
-        return {"m_mission_id": mission["id"], "value": self.value(mission) or 0, "calculate_type": 1 if mission["situation_type"] in TIME_SITUATIONS else 2,
+        return {"m_mission_id": mission["id"], "value": self.effective_value(mission) or 0, "calculate_type": 1 if mission["situation_type"] in TIME_SITUATIONS else 2,
                 "is_received": int(self.key(mission) in self.progress["mission_claims"])}
 
     def listing(self):
@@ -199,7 +206,7 @@ class Missions:
                 continue
             if not available(record, self.now):
                 continue
-            elapsed = (self.now.date() - date.fromisoformat(record["start_at"][:10])).days + 1
+            elapsed = open_days(self, record["m_special_mission_id"], record)
             eligible = [self.catalog.get("m_missions", d["m_mission_id"]) for d in self.catalog.rows("m_special_mission_days")
                         if d["m_special_mission_id"] == record["m_special_mission_id"] and d["day"] <= elapsed]
             special.append({"t_special_mission_id": record["id"], "m_special_mission_id": record["m_special_mission_id"],
@@ -216,8 +223,7 @@ class Missions:
             record, days = self.special(special_id)
             if not available(record, self.now):
                 raise GameplayError("Special mission reward period has ended")
-            started = date.fromisoformat(record["start_at"][:10])
-            elapsed = (self.now.date() - started).days + 1
+            elapsed = open_days(self, special_id, record)
             allowed_days = {r["m_mission_id"] for r in days if r["day"] <= elapsed}
         pending, waiting = [], []
         for identifier in ids:

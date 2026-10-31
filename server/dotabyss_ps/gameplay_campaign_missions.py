@@ -6,6 +6,7 @@ from .gameplay_catalog import available, number
 from .gameplay_event_missions import add_statistic, validate_statistics
 from .gameplay_missions import Missions
 from .gameplay_statistics import key as statistic_key
+from .gameplay_mission_calendar import reset_day, statistics_days
 
 
 def definitions(game, campaign):
@@ -81,7 +82,7 @@ class CampaignMissions(Missions):
         if not self.joined():
             return 0
         data = statistics(self.game, self.campaign["id"])
-        values = data["days"].get(self.now.date().isoformat(), {}) if mission["mission_type"] == 8 else data["totals"]
+        values = statistics_days(data, self.now).get(reset_day(self.now).isoformat(), {}) if mission["mission_type"] == 8 else data["totals"]
         key = statistic_key(mission["situation_type"], mission["target_id"], mission["sub_target_id"])
         return number(values.get(key, 0), 0, 2 ** 63 - 1)
 

@@ -112,9 +112,17 @@ def simple_states(game, features):
         bucket(game.progress)
     if "battle" in features and features["battle"]["data"]["active"] is not None:
         raise GameplayError("An active battle cannot be imported")
-    for name in ("friends", "missions"):
-        if name in features:
-            shape(features[name]["data"])
+    if "friends" in features:
+        shape(features["friends"]["data"])
+    if "missions" in features:
+        from .gameplay_mission_calendar import prepare as prepare_calendar
+        from .gameplay_mission_controls import validate_controls
+        from .gameplay_pass_statistics import prepare as prepare_pass
+
+        shape(features["missions"]["data"], optional=("calendar", "controls", "pass_statistics"))
+        prepare_calendar(game)
+        prepare_pass(game)
+        validate_controls(game)
     if "character" in features:
         data = features["character"]["data"]
         shape(data, optional=("ability_releases", "ability_response_version", "skin_bond_rewards"))

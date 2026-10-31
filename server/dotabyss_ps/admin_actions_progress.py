@@ -376,6 +376,7 @@ def event_reset(game, args):
 
 def event_statistic(game, args):
     from .gameplay_event_missions import EVENT_SITUATIONS, statistics
+    from .gameplay_mission_calendar import reset_day, statistics_days
     from .gameplay_statistics import key
 
     game.catalog.get("m_events", args["event_id"])
@@ -385,11 +386,14 @@ def event_statistic(game, args):
     identity = key(args["situation"], args["target"], args["sub_target"])
     values = data["totals"] if args["period"] == "total" else data["days"].setdefault(game.now.date().isoformat(), {})
     values[identity] = args["value"]
+    if args["period"] == "today":
+        statistics_days(data, game.now).setdefault(reset_day(game.now).isoformat(), {})[identity] = args["value"]
     return changed("已修改活动任务统计", timing="page")
 
 
 def statistic(game, args):
     from .gameplay_statistics import bucket, key
+    from .gameplay_mission_calendar import reset_day, statistics_days
 
     known = {row["situation_type"] for row in game.catalog.rows("m_missions")}
     if args["situation"] not in known:
@@ -398,7 +402,9 @@ def statistic(game, args):
     identity = key(args["situation"], args["target"], args["sub_target"])
     values = data["totals"] if args["period"] == "total" else data["days"].setdefault(game.now.date().isoformat(), {})
     values[identity] = args["value"]
-    return changed("已修改累计任务统计", timing="page", warnings=["直接读取角色、关卡等状态的任务仍以实际状态为准。"])
+    if args["period"] == "today":
+        statistics_days(data, game.now).setdefault(reset_day(game.now).isoformat(), {})[identity] = args["value"]
+    return changed("已修改累计任务统计", timing="page", warnings=["角色和关卡类任务读取实际状态；通行证使用独立周期统计，可通过批量任务操作设置完成。"])
 
 
 STAT_FIELDS = [field("situation", "任务统计类型", min=1), field("target", "目标 ID", default=0), field("sub_target", "次目标 ID", default=0),

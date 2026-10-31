@@ -8,6 +8,7 @@ from .gameplay_missions import Missions
 from .gameplay_records import find, rows
 from .gameplay_routes import route
 from .gameplay_statistics import key as statistic_key
+from .gameplay_mission_calendar import reset_day, statistics_days, validate_statistics_days
 
 COUNT_SITUATIONS = {1: 110000, 3: 110001, 5: 110002, 7: 110003, 8: 110004}
 EVENT_SITUATIONS = {*COUNT_SITUATIONS.values(), 110005, 110200, 110201, 110202, 110300, 110400, 110500, 110600, 110700}
@@ -22,7 +23,7 @@ def statistics(game, event_id):
 
 
 def validate_statistics(data):
-    if not isinstance(data, dict) or set(data) != {"totals", "days"} or not all(isinstance(v, dict) for v in data.values()):
+    if not isinstance(data, dict) or set(data) - {"totals", "days", "reset_days", "reset_started_at"} or not {"totals", "days"} <= data.keys() or not all(isinstance(data[k], dict) for k in ("totals", "days")):
         raise GameplayError("Stored event mission statistics are invalid")
     if len(data["totals"]) > 10000 or len(data["days"]) > 400:
         raise GameplayError("Stored event mission statistics exceed their limit")
@@ -38,16 +39,21 @@ def validate_statistics(data):
             if not isinstance(key, str) or not re.fullmatch(r"[1-9][0-9]{0,8}:[0-9]{1,19}:[0-9]{1,19}", key):
                 raise GameplayError("Stored event mission statistic key is invalid")
             number(value, 0, 2 ** 63 - 1)
+    validate_statistics_days(data, 2 ** 63 - 1)
     return data
 
 
 def add_statistic(game, data, situation, value, target=0, sub=0, *, mode="add"):
     value = number(value, 0, 2 ** 63 - 1)
     key = statistic_key(situation, target, sub)
+    reset = statistics_days(data, game.now)
+    current = reset_day(game.now)
+    reset_today = reset.setdefault(current.isoformat(), {})
+    data["reset_days"] = {day: values for day, values in reset.items() if day >= (current - timedelta(days=399)).isoformat()}
     today = game.now.date().isoformat()
     cutoff = (game.now.date() - timedelta(days=399)).isoformat()
     data["days"] = {day: values for day, values in data["days"].items() if day >= cutoff}
-    for values in (data["totals"], data["days"].setdefault(today, {})):
+    for values in (data["totals"], data["days"].setdefault(today, {}), reset_today):
         previous = values.get(key)
         if previous is not None:
             number(previous, 0, 2 ** 63 - 1)
@@ -126,7 +132,7 @@ class EventMissions(Missions):
         if situation not in EVENT_SITUATIONS:
             return super().value(mission)
         data = statistics(self.game, self.event["id"])
-        values = data["days"].get(self.now.date().isoformat(), {}) if mission["mission_type"] == 8 else data["totals"]
+        values = statistics_days(data, self.now).get(reset_day(self.now).isoformat(), {}) if mission["mission_type"] == 8 else data["totals"]
         target, sub = mission["target_id"], mission["sub_target_id"]
         if situation == 110202:
             quests = [row for row in self.catalog.rows("m_event_speedrun_quests")

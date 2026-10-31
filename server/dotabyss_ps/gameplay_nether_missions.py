@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import copy
-from datetime import date, timedelta
+from datetime import date
 
 from .gameplay_catalog import GameplayError, identifiers
 from .gameplay_delivery import deliver
@@ -10,6 +10,7 @@ from .gameplay_nether_state import POINT_FIELDS, ensure, state
 from .gameplay_records import rows
 from .gameplay_statistics import record as statistic, value as statistic_value
 from .gameplay_access import require_feature
+from .gameplay_mission_calendar import reset_day, statistics_days, week_start
 
 
 class NetherMissions(Missions):
@@ -26,12 +27,14 @@ class NetherMissions(Missions):
                 start = date.fromisoformat(self.catalog.get("m_mission_terms", mission["m_mission_term_id"])["start_at"][:10])
             if mission["situation_type"] == 120001:
                 if mission["mission_type"] in (2, 8):
-                    start = self.now.date()
+                    start = reset_day(self.now)
                 elif mission["mission_type"] in (3, 6):
-                    start = max(start or date.min, self.now.date() - timedelta(days=self.now.weekday()))
+                    start = max(start or date.min, week_start(self.now))
+                daily = statistics_days(self.statistics, self.now) if mission["mission_type"] in (2, 3, 6, 8) else self.statistics["days"]
+                end = reset_day(self.now) if mission["mission_type"] in (2, 3, 6, 8) else self.now.date()
                 values = self.statistics["totals"] if start is None else {
-                    key: value for day, entries in self.statistics["days"].items()
-                    if start <= date.fromisoformat(day) <= self.now.date() for key, value in entries.items()}
+                    key: value for day, entries in daily.items()
+                    if start <= date.fromisoformat(day) <= end for key, value in entries.items()}
                 prefix = f"120001:{mission['target_id']}:"
                 return sum(value > 0 and key.rsplit(":", 1)[1] != "0" for key, value in values.items() if key.startswith(prefix))
             mode = "add" if mission["situation_type"] == 120002 else "max"

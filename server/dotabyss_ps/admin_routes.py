@@ -301,7 +301,7 @@ def install_admin(app, store, local_state):
         client_id = request.query_params.get("client_id", "")
         if not 0 <= after < 2 ** 63 or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", client_id):
             raise AdminError("Invalid synchronization identity")
-        result = invoke(service.journal.sync, profile_id, after)
+        result = invoke(service.sync_snapshot, profile_id, after)
         invoke(service.journal.touch, profile_id, client_id)
         if local_state and local_state.event_master:
             current = invoke(local_state.client_master, profile_id)

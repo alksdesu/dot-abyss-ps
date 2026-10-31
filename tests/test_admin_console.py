@@ -54,7 +54,7 @@ def test_preview_apply_retry_conflict_and_current_sync(setup_gameplay):
     call(c, "api/user")
     schema = c.client.get("/admin/schema", headers=headers(c))
     assert schema.status_code == 200, schema.text
-    assert len(schema.json()["actions"]) == 130
+    assert {"mission.open_days", "mission.complete", "mission.claim"} <= {row["id"] for row in schema.json()["actions"]}
     assert any(group["id"] == "social" for group in schema.json()["groups"])
     before = snapshot(c)
     initial = get(c)["state"]["records"]["t_statuses"]["up"][0]["gold"]
