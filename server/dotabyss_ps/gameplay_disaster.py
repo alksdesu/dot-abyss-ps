@@ -5,6 +5,7 @@ import copy
 from .gameplay_battle_rewards import grant_display_rewards, settle_battle
 from .gameplay_battle_session import battle_state, create_session, session_view
 from .gameplay_catalog import GameplayError, identifiers, number, parse_timestamp
+from .gameplay_campaign_effects import boost_disaster_rewards
 from .gameplay_disaster_party import formation_fuel
 from .gameplay_disaster_state import (
     add_report, appearance_for_slot, boss_unlocked, candidates, choose_appearance, clear_slot,
@@ -146,7 +147,7 @@ def complete_disaster(game, session, stage_results):
     generic = settle_battle(game, session, stage_results)["battle_result"]
     table = "m_disaster_sp_level_rewards" if context["is_special_boss"] else "m_disaster_level_rewards"
     rewards = [reward for reward in game.catalog.rows(table) if reward["disaster_level"] == context["disaster_level"]]
-    displayed = grant_display_rewards(game, rewards)
+    displayed = grant_display_rewards(game, boost_disaster_rewards(game, rewards))
     status = status_record(game)
     if data["day"] != server_day(game.now):
         expire_slots(game, timeout=True)
