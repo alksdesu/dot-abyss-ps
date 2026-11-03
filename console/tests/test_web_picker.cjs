@@ -160,6 +160,17 @@ function browser() {
 
 const rows = [{ id: "170014", name: "原文", _display: { name: "SSR 必中轉蛋券" } }, { id: 170009, name: "紀念轉蛋券" }];
 
+test("non-JSON service errors show the HTTP status and release the busy state", async () => {
+  const page = browser(), form = page.form([{ name: "id", label: "内容 ID", type: "integer", source: "m_items" }]);
+  page.open(form);
+  page.requests[0].resolve({ ok: false, status: 500, json: async () => { throw new SyntaxError("not JSON"); } });
+  await page.tick();
+  assert.match(page.node("error-message").textContent, /HTTP 500/);
+  assert.doesNotMatch(page.node("error-message").textContent, /版本一致/);
+  assert.equal(page.node("error-banner").hidden, false);
+  assert.equal(page.core.state.pending, 0);
+});
+
 test("single selection immediately fills a numeric ID, remembers its name and closes", async () => {
   const page = browser(), form = page.form([{ name: "id", label: "内容主数据 ID", type: "integer", source: "m_items" }]);
   page.open(form); await page.reply(0, rows);

@@ -5,9 +5,11 @@ import hashlib
 import json
 import os
 import shutil
+import stat
 import struct
 from pathlib import Path
 
+from dotabyss_ps.profile_context import repair_storage_context, verify_profile_context
 from dotabyss_ps.release_manifest import default_client_dir, load_local_release
 
 
@@ -60,8 +62,42 @@ def patch_settings(payload: bytes, release: dict) -> bytes:
     return bytes(patched)
 
 
-def verify_client(destination: Path, release: dict, *, require_seeds: bool = False) -> dict:
-    manifest = json.loads((destination / "local-client.json").read_text(encoding="utf-8"))
+def _manifest_bytes(path: Path) -> bytes:
+    info = path.lstat()
+    if (not stat.S_ISREG(info.st_mode) or stat.S_ISLNK(info.st_mode)
+            or getattr(info, "st_file_attributes", 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT or info.st_size > 2 * 1024 * 1024):
+        raise ValueError("Prepared client manifest must be a regular file no larger than 2 MiB")
+    return path.read_bytes()
+
+
+def _backup_manifest(destination: Path, payload: bytes) -> None:
+    directory = destination / "profile-context-backups"
+    directory.mkdir(exist_ok=True)
+    info = directory.lstat()
+    if (not stat.S_ISDIR(info.st_mode) or stat.S_ISLNK(info.st_mode)
+            or getattr(info, "st_file_attributes", 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT
+            or directory.resolve().parent != destination.resolve()):
+        raise ValueError("Profile context backup directory must not redirect storage")
+    path = directory / (hashlib.sha256(payload).hexdigest() + ".json")
+    if path.exists() or path.is_symlink():
+        if _manifest_bytes(path) != payload:
+            raise ValueError("The original profile context manifest backup changed: " + str(path))
+        return
+    temporary = path.with_suffix(path.suffix + ".partial")
+    if temporary.exists() or temporary.is_symlink():
+        _manifest_bytes(temporary)
+    with temporary.open("wb") as stream:
+        stream.write(payload)
+        stream.flush()
+        os.fsync(stream.fileno())
+    temporary.rename(path)
+
+
+def _client_manifest(destination: Path, release: dict) -> tuple[dict, Path, bytes]:
+    payload = _manifest_bytes(destination / "local-client.json")
+    manifest = json.loads(payload.decode("utf-8"))
+    if not isinstance(manifest, dict):
+        raise ValueError("Prepared client manifest must contain an object")
     if manifest["release"] != release["release"] or manifest["source_fingerprints"] != release["source_fingerprints"]:
         raise ValueError("Prepared client belongs to a different release")
     if manifest["prepared_fingerprints"] != release["prepared_fingerprints"]:
@@ -75,14 +111,16 @@ def verify_client(destination: Path, release: dict, *, require_seeds: bool = Fal
                 "runtime_isolation_verified": False}
     if any(manifest.get(key) != value for key, value in expected.items()):
         raise ValueError("Prepared identity, executable or profile differs from the reviewed release")
-    if manifest.get("profile_physical_path") != str(profile.resolve(strict=True)):
-        raise ValueError("The Windows profile storage context changed")
-    seed_paths = manifest.get("profile_seed_paths", {})
-    if not isinstance(seed_paths, dict):
-        raise ValueError("The Windows cache storage context changed")
-    for relative, recorded_path in seed_paths.items():
-        if str(within(profile, relative)) != recorded_path:
-            raise ValueError("The Windows cache storage context changed")
+    for relative, fingerprint in manifest["prepared_fingerprints"].items():
+        if digest(within(destination, relative)) != fingerprint:
+            raise ValueError("Prepared client fingerprint changed: " + relative)
+    return manifest, profile, payload
+
+
+def verify_client(destination: Path, release: dict, *, require_seeds: bool = False) -> dict:
+    manifest, profile, _ = _client_manifest(destination, release)
+    context = verify_profile_context(manifest, profile)
+    seed_paths = context["profile_seed_paths"]
     if require_seeds:
         for item in release["profile_seeds"]:
             seed = within(profile, item["relative"])
@@ -90,10 +128,19 @@ def verify_client(destination: Path, release: dict, *, require_seeds: bool = Fal
                 raise ValueError("The Windows cache storage context changed")
             if digest(seed) != item["sha256"]:
                 raise ValueError("Prepared catalog or master seed changed")
-    for relative, expected in manifest["prepared_fingerprints"].items():
-        if digest(within(destination, relative)) != expected:
-            raise ValueError("Prepared client fingerprint changed: " + relative)
     return manifest
+
+
+def repair_profile_context(destination: Path, release: dict) -> dict:
+    manifest, profile, payload = _client_manifest(destination, release)
+
+    def commit(path, updated):
+        if _manifest_bytes(path) != payload:
+            raise ValueError("Prepared client manifest changed during profile repair; retry with stable configuration")
+        _backup_manifest(destination, payload)
+        write_json(path, updated)
+
+    return repair_storage_context(manifest, profile, destination / "local-client.json", commit)
 
 
 def prepare(source: Path, destination: Path, release: dict, profile: Path) -> dict:
@@ -165,12 +212,22 @@ def main() -> None:
     parser.add_argument("--release", type=Path)
     parser.add_argument("--source", type=Path)
     parser.add_argument("--destination", type=Path)
-    parser.add_argument("--verify", action="store_true")
+    action = parser.add_mutually_exclusive_group()
+    action.add_argument("--verify", action="store_true")
+    action.add_argument("--repair-profile", action="store_true")
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     release = json.loads(args.release.read_text(encoding="utf-8")) if args.release is not None else load_local_release(root)
     destination = args.destination.resolve() if args.destination is not None else default_client_dir(root)
-    if args.verify:
+    if args.repair_profile:
+        from dotabyss_ps.admin_launcher import game_processes
+        from dotabyss_ps.process_lock import exclusive_process_lock
+
+        with exclusive_process_lock(destination / ".local-launcher.lock"):
+            if game_processes(within(destination, release["executable"])):
+                parser.error("Exit the local game before repairing its profile storage context")
+            result = repair_profile_context(destination, release)
+    elif args.verify:
         result = verify_client(destination, release)
     else:
         if args.source is None:

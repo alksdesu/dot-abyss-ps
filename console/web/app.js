@@ -201,7 +201,7 @@
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       });
       const result = await response.json().catch(() => {
-        throw new Error("服务返回格式无效，请确认控制台与服务版本一致。");
+        throw new Error(`服务返回了无法解析的响应（HTTP ${response.status}），请查看启动器的服务日志。`);
       });
       if (!response.ok)
         throw new Error(

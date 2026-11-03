@@ -67,6 +67,20 @@ def matching_master(context):
             "client": {"package": build["launcher_product_id"], "version": build["application_version"], "metadata_sha256": metadata}}
 
 
+@pytest.mark.parametrize("failure", [FileNotFoundError(2, "missing profile directory"), PermissionError(13, "access denied")])
+def test_preflight_io_errors_are_reported_without_starting_or_rewriting(launch_case, monkeypatch, failure):
+    c = launch_case
+    before = c.config.read_bytes()
+    def fail(_):
+        raise failure
+    monkeypatch.setattr(c.launcher, "_preflight", fail)
+    with pytest.raises(GameplayError, match="缓存目录和文件权限") as error:
+        c.launcher.start(c.first)
+    assert error.value.status == 503 and error.value.code == 5038
+    assert c.config.read_bytes() == before and not c.commands
+    assert not c.launcher.receipt_path.exists()
+
+
 def test_launch_sets_selected_profile_once_and_preserves_other_plugins(launch_case):
     c = launch_case
     translation = c.client / "BepInEx" / "plugins" / "AbyssMod" / "AbyssMod.dll"

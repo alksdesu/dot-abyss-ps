@@ -201,7 +201,7 @@ class GameLauncher:
         spec = importlib.util.spec_from_file_location("dotabyss_launcher_verifier", module_path)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-        return module.verify_client(self.client_root, release)
+        return module.repair_profile_context(self.client_root, release)
 
     def _preflight(self, release):
         if self.local is None:
@@ -254,6 +254,9 @@ class GameLauncher:
                 return self._start(profile_id, normalized)
         except ProcessLockBusy as error:
             raise GameplayError("另一个启动请求正在处理，请稍后查看游戏状态", 409, 4098) from error
+        except OSError as error:
+            detail = error.strerror or str(error)
+            raise GameplayError("无法准备本地游戏文件，请检查缓存目录和文件权限：" + detail, 503, 5038) from error
 
     def _start(self, profile_id, origin):
         profile = self._profile(profile_id)
