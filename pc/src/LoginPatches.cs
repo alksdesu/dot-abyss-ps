@@ -8,7 +8,6 @@ using Project.Api;
 using UnityEngine;
 using System.Runtime.CompilerServices;
 using GameCancellationToken = Il2CppSystem.Threading.CancellationToken;
-using LoginTuple = Il2CppSystem.ValueTuple<long, string>;
 
 namespace DotAbyss.Local.Pc;
 
@@ -20,10 +19,12 @@ internal static class LoginPatches
         add(typeof(DmmSdkUnityIap), "Initialize", new[] { typeof(DmmMarketingIdData), typeof(GameCancellationToken), typeof(Il2CppSystem.Action), typeof(Il2CppSystem.Action) }, typeof(LoginPatches), nameof(InitializeIap));
         VerifyNativeType<GameCancellationToken>();
         VerifyNativeType<Il2CppReferenceArray<TermsAgreeRequestEntity.TermsAgree>>();
-        VerifyNativeType<LoginTuple>();
-        VerifyNativeType<UniTask<LoginTuple>>();
+        VerifyNativeType<VersionEntity>();
+        VerifyNativeType<Project.BanWarningModel>();
+        VerifyNativeType<Project.LoginResultModel>();
+        VerifyNativeType<UniTask<Project.LoginResultModel>>();
         VerifyNativeType<UniTask<string>>();
-        add(typeof(Project.Login), "LoginDmmGamePlayerAsync", new[] { typeof(Il2CppReferenceArray<TermsAgreeRequestEntity.TermsAgree>), typeof(GameCancellationToken) }, typeof(LoginPatches), nameof(Login));
+        add(typeof(Project.Login), "LoginDmmGamePlayerAsync", new[] { typeof(VersionEntity), typeof(Il2CppReferenceArray<TermsAgreeRequestEntity.TermsAgree>), typeof(GameCancellationToken) }, typeof(LoginPatches), nameof(Login));
         add(typeof(Project.Login), "FetchRawUuidFollowingPlatformAsync", new[] { typeof(GameCancellationToken) }, typeof(LoginPatches), nameof(LocalUuid));
     }
 
@@ -70,15 +71,16 @@ internal static class LoginPatches
         return false;
     }
 
-    internal static bool Login(GameCancellationToken __1, ref UniTask<LoginTuple> __result)
+    internal static bool Login(VersionEntity __0, GameCancellationToken __2, ref UniTask<Project.LoginResultModel> __result)
     {
         var stage = "prepare_login";
         try
         {
-            __1.ThrowIfCancellationRequested();
+            __2.ThrowIfCancellationRequested();
+            if (__0 is null) throw new InvalidOperationException("The native version entity is unavailable.");
             var session = Plugin.Session.Get();
             var login = Plugin.Session.AuthenticateGameLogin();
-            __1.ThrowIfCancellationRequested();
+            __2.ThrowIfCancellationRequested();
             var manager = Engine.Get<ApiManager>() ?? throw new InvalidOperationException("Native API manager is unavailable.");
             Project.Login._rawUuidCache = login.Uuid;
             Project.Login._isCachedRawUuid = true;
@@ -86,25 +88,32 @@ internal static class LoginPatches
             Project.Login.SetEncryptUuidToken(login.Uuid);
             manager.SetSession(session.Token);
             manager.SetHeader("api-token", session.ApiToken);
-            stage = "construct_tuple";
-            var tuple = new LoginTuple(login.UserId, login.ServerTime);
-            stage = "verify_tuple";
-            var tupleUserMatches = tuple.Item1 == login.UserId;
-            var tupleTimeMatches = tuple.Item2 == login.ServerTime;
-            Plugin.Info($"Native login tuple: user_matches={tupleUserMatches}, time_matches={tupleTimeMatches}");
+            stage = "construct_result";
+            var model = new Project.LoginResultModel
+            {
+                Version = __0,
+                UserId = login.UserId,
+                ServerTime = login.ServerTime,
+                BanWarning = Project.BanWarningModel.Create(null),
+            };
+            stage = "verify_result";
+            var modelUserMatches = model.UserId == login.UserId;
+            var modelTimeMatches = model.ServerTime == login.ServerTime;
+            var warningClear = model.BanWarning is { HasWarning: false };
+            Plugin.Info($"Native login result: user_matches={modelUserMatches}, time_matches={modelTimeMatches}, warning_clear={warningClear}");
             stage = "construct_task";
-            var task = new UniTask<LoginTuple>(source: null!, token: 0);
+            var task = new UniTask<Project.LoginResultModel>(source: null!, token: 0);
             stage = "assign_task_result";
-            task.result = tuple;
+            task.result = model;
             stage = "verify_task_result";
             var taskResult = task.result;
             var resultPresent = taskResult is not null;
-            var taskUserMatches = resultPresent && taskResult!.Item1 == login.UserId;
-            var taskTimeMatches = resultPresent && taskResult!.Item2 == login.ServerTime;
+            var taskUserMatches = resultPresent && taskResult!.UserId == login.UserId;
+            var taskTimeMatches = resultPresent && taskResult!.ServerTime == login.ServerTime;
             var sourceNull = task.source is null;
             var tokenZero = task.token == 0;
             Plugin.Info($"Native login task: result_present={resultPresent}, user_matches={taskUserMatches}, time_matches={taskTimeMatches}, source_null={sourceNull}, token_zero={tokenZero}");
-            if (!taskUserMatches || !taskTimeMatches || !sourceNull || !tokenZero)
+            if (!modelUserMatches || !modelTimeMatches || !warningClear || !taskUserMatches || !taskTimeMatches || !sourceNull || !tokenZero)
                 throw new InvalidDataException("The native login task did not preserve its result.");
             stage = "return_task";
             __result = task;

@@ -308,14 +308,14 @@ def test_response_keeps_transaction_resource_version_during_concurrent_activatio
 @pytest.mark.parametrize("local_setup", [PLAY_CLIENT, PC_CLIENT], indirect=True, ids=["play", "pc"])
 def test_user_and_home_initialize_persist_and_use_matching_resource_version(local_setup):
     context = local_setup
-    context.store.update_runtime({"application_version": "1.15.0"})
+    context.store.update_runtime({"application_version": context.schema["client"]["version"]})
     identity, headers = login(context.client, "local-player")
     user = game(context.client, headers)
     home = game(context.client, headers, "/api/home")
     assert user["contents"]["records"] == home["contents"]["records"]
     assert user["versions"]["resource"] == [context.record["revision"]]
     version_field = "ClientVersionStandaloneDmmR18" if context.schema["client"] == PC_CLIENT else "ClientVersionAndroidGooglePlayGeneral"
-    assert user["versions"][version_field] == ["1.15.0"]
+    assert user["versions"][version_field] == [context.schema["client"]["version"]]
     assert context.store.master()["client"] == context.schema["client"]
     assert len(user["contents"]["records"]["t_characters"]["up"]) == 3
     persisted = saved(context.store, identity["user_id"])

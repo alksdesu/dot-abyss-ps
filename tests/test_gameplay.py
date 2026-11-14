@@ -24,8 +24,8 @@ NOW = datetime(2026, 10, 31, 14, tzinfo=JST)
 
 @pytest.fixture(scope="module")
 def gameplay_master():
-    schema_file = ROOT / "artifacts/master-schema-pc-1.15.0.json"
-    blob = ROOT / "data-pc-1.15.0/master/blobs/ee9f68157917ee9601c539f950aaf98ae9b446a54dac66707bc297746efac523.msgpack"
+    schema_file = ROOT / "artifacts/master-schema-pc-1.16.1.json"
+    blob = ROOT / "data-pc/master/blobs/079efbae8e920dfb15f4ea49ee04714ee68d43d87ca734e2b30e9ee99155741e.msgpack"
     if not schema_file.exists() or not blob.exists():
         pytest.skip("Verified PC master dataset is required")
     bound = json.loads(schema_file.read_text(encoding="utf-8"))

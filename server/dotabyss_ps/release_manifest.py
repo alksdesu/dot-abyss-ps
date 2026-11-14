@@ -215,14 +215,14 @@ def load_manifest(root=None):
     clients = manifest.get("supported_clients")
     if not isinstance(clients, list):
         raise ReleaseManifestError("Supported client identities are missing")
-    build_packages = {client["package"] for client in derived_clients}
+    build_versions = {(client["package"], client["version"]) for client in derived_clients}
     historical_clients = []
     for client in clients:
         client = _object(client, "supported client")
         _text(client.get("package"), "supported package")
         _text(client.get("version"), "supported version")
         _hash(client.get("metadata_sha256"), "supported metadata fingerprint")
-        if client["package"] in build_packages:
+        if (client["package"], client["version"]) in build_versions:
             if client not in derived_clients:
                 raise ReleaseManifestError("Supported client identity conflicts with the canonical build")
         elif client not in historical_clients:

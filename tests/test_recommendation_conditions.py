@@ -161,8 +161,8 @@ def test_all_current_offer_owners_resolve_without_aliasing(recommendation_game):
     game = recommendation_game
     definitions = game.catalog.rows("m_payment_recommends")
     owners = {row["id"]: owner_context(game.catalog, row) for row in definitions}
-    assert len(owners) == 360
-    assert sum(owner is not None for owner in owners.values()) == 144
+    assert len(owners) == 386
+    assert sum(owner is not None for owner in owners.values()) == 156
     assert owners[260054] == ("event", 900001)
     assert owners[260106] == ("event", 900002)
     assert owners[260037] == ("campaign", 10003)

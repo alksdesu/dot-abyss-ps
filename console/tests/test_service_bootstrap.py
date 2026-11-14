@@ -11,7 +11,7 @@ from console.client import ConsoleError
 
 @pytest.fixture(autouse=True)
 def lifecycle_schema(monkeypatch):
-    monkeypatch.setattr(module, "default_schema_path", lambda root: root / "artifacts" / "master-schema-pc-1.15.0.json")
+    monkeypatch.setattr(module, "default_schema_path", lambda root: root / "artifacts" / "master-schema-pc-1.16.1.json")
 
 
 @pytest.mark.parametrize("wrapped", [False, True])
@@ -58,7 +58,7 @@ def environment(tmp_path):
     python = root / ".venv" / "Scripts" / "python.exe"
     python.parent.mkdir(parents=True)
     python.write_bytes(b"test only")
-    schema = root / "artifacts" / "master-schema-pc-1.15.0.json"
+    schema = root / "artifacts" / "master-schema-pc-1.16.1.json"
     schema.parent.mkdir(parents=True)
     schema.write_text("{}")
     data = root / "data"

@@ -117,7 +117,8 @@ def inspect_inputs(project_root, *, source=None, cache_root=None, shared_root=No
 def _check_active(store, report):
     active = store.master()
     if active is not None and active["revision"] != report["revision"]:
-        raise ValueError("Existing data uses another master revision; setup will not migrate or reset saves")
+        raise ValueError("Existing data uses another master revision; rebind the saves first: "
+                         f"python -m dotabyss_ps.master_migration --to {report['revision']} --apply")
     with store.connection() as db:
         other = db.execute("SELECT 1 FROM game_states WHERE master_revision<>? LIMIT 1", (report["revision"],)).fetchone()
     if other:
@@ -132,11 +133,12 @@ def import_resources(inputs, data_dir, *, allow_partial=False, progress=print):
     _regular_output(index_path)
     _regular_output(report_path)
     store = Store(data_dir / "local.sqlite3")
-    _check_active(store, inputs["master_report"])
     masters = MasterCatalog(data_dir, store)
+    # Staging first keeps the new master importable, so the rebind command named by _check_active can run.
     master = masters.stage(inputs["master"], inputs["schema"], "PC setup: verified local cache")
     if master["revision"] != inputs["master_report"]["revision"]:
         raise ValueError("Master data or schema changed during setup; check the cache and retry")
+    _check_active(store, inputs["master_report"])
     assets = AssetCatalog(data_dir, store, release_profile=inputs["release_profile"])
     active = assets.active()
     if active is not None:

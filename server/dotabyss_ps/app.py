@@ -282,6 +282,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         store.add_event(body["component"], body["event"], sanitize(body["details"]))
         return JSONResponse({"status": "ok"})
 
+    def login_contents(identity, session):
+        return {**identity, "token": session, "token_status": 0, "ban_warning": None}
+
     async def local_login(request: Request):
         body = await request_body(request)
         profile = body.get("profile", "default")
@@ -291,8 +294,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise RequestFailure(400, 4004, "Use local profile bootstrap; external credentials are not accepted")
         identity = store.login(profile)
         token = identity.pop("api_token")
-        identity["token_status"] = 0
-        return game_response(request, identity, token=token, headers={"x-olg-session": identity["token"], "api-token": token}, profile_id=identity["user_id"])
+        contents = login_contents(identity, identity["token"])
+        return game_response(request, contents, token=token, headers={"x-olg-session": identity["token"], "api-token": token}, profile_id=identity["user_id"])
 
     async def native_login(request: Request):
         body = await request_body(request)
@@ -316,7 +319,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             for item in agreements
         )):
             raise RequestFailure(400, 4006, "Invalid login terms agreements")
-        contents = {**identity, "token": session, "token_status": 0}
+        contents = login_contents(identity, session)
         return game_response(request, contents, token=api_token, headers={"x-olg-session": session, "api-token": api_token})
 
     app.add_api_route("/local/login", local_login, methods=["POST"])

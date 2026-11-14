@@ -93,7 +93,9 @@ def test_authored_supplements_preserve_gameplay_values_and_markup():
 
 
 def test_supplemental_master_bindings_match_native_schema():
-    schema = overlays.read_json(ROOT / "artifacts/master-schema-pc-1.15.0.json")["tables"]
+    from dotabyss_ps.release_manifest import default_schema_path
+
+    schema = overlays.read_json(default_schema_path(ROOT))["tables"]
     for table, fields in overlays.read_json(ROOT / "pc-translation/mapping-overrides.json").items():
         for field, dictionary in fields.items():
             native = next(row for row in schema[dictionary] if row["name"] == field)

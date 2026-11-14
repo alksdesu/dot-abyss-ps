@@ -53,7 +53,7 @@ def context(tmp_path, monkeypatch):
     python = root / ".venv" / "Scripts" / "python.exe"
     python.parent.mkdir(parents=True)
     python.write_bytes(b"test only")
-    schema = root / "artifacts" / "master-schema-pc-1.15.0.json"
+    schema = root / "artifacts" / "master-schema-pc-1.16.1.json"
     schema.parent.mkdir(parents=True)
     schema.write_text("{}")
     monkeypatch.setattr(module, "default_schema_path", lambda selected: schema if selected == root else None)

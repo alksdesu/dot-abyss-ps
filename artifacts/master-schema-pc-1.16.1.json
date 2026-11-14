@@ -2,8 +2,8 @@
   "schema_version": 1,
   "client": {
     "package": "dotabyss_x_cl",
-    "version": "1.15.0",
-    "metadata_sha256": "d38f026a769e522b136830785ad2789f834c47127be764f89ab294b4d91f056d"
+    "version": "1.16.1",
+    "metadata_sha256": "73635c190058a2687e6718e8cfcf3c41e04b13cfd7b05cadeab3e90294b6afac"
   },
   "client_identity_source": {
     "package_field": "DMM GAMES PLAYER product ID, not an Android package",
@@ -11,12 +11,12 @@
     "version_field": "PlayerSettings.bundleVersion",
     "runtime_verification_required": true
   },
-  "native_library_sha256": "d32ffc1e7940265e3e3952339f6cc53c190d13923edd8e275705b046a0e1b4bd",
-  "field_order_source": "PC 1.15.0 native metadata declaration order; MFirstDownload array element types bound through GameAssembly PE IL2CPP type registration",
+  "native_library_sha256": "3b47a7a46a8bdc7c0f2cd080f741e4cbc2706853a4320ea4d77f38cd80df4fc3",
+  "field_order_source": "PC 1.16.1 native metadata declaration order; MFirstDownload array element types bound through GameAssembly PE IL2CPP type registration",
   "source_fingerprints": {
-    "metadata": "d38f026a769e522b136830785ad2789f834c47127be764f89ab294b4d91f056d",
-    "native_library": "d32ffc1e7940265e3e3952339f6cc53c190d13923edd8e275705b046a0e1b4bd",
-    "master": "ee9f68157917ee9601c539f950aaf98ae9b446a54dac66707bc297746efac523"
+    "metadata": "73635c190058a2687e6718e8cfcf3c41e04b13cfd7b05cadeab3e90294b6afac",
+    "native_library": "3b47a7a46a8bdc7c0f2cd080f741e4cbc2706853a4320ea4d77f38cd80df4fc3",
+    "master": "079efbae8e920dfb15f4ea49ee04714ee68d43d87ca734e2b30e9ee99155741e"
   },
   "tables": {
     "m_initial_contents": [
@@ -10802,18 +10802,18 @@
     "skip_unknown_tables": true,
     "unknown_table_evidence": {
       "method": "MFirstDownloadFormatter.Deserialize",
-      "token": "0x060024ba",
-      "rva": "0x49cd790",
-      "method_end_rva": "0x49e32f0",
+      "token": "0x060024d1",
+      "rva": "0x4b152b0",
+      "method_end_rva": "0x4b2ad70",
       "unknown_key_branch_rvas": [
-        "0x49cfb68",
-        "0x49cfbb3"
+        "0x4b17688",
+        "0x4b176d3"
       ],
-      "skip_block_rva": "0x49e31c9",
-      "skip_call": "0x49e31ce -> MessagePackReader.Skip 0x3b60f40",
-      "map_next_entry_rva": "0x49e31d3",
-      "client_metadata_sha256": "d38f026a769e522b136830785ad2789f834c47127be764f89ab294b4d91f056d",
-      "native_library_sha256": "d32ffc1e7940265e3e3952339f6cc53c190d13923edd8e275705b046a0e1b4bd"
+      "skip_block_rva": "0x4b2ace9",
+      "skip_call": "0x4b2acee -> MessagePackReader.Skip 0x3ba7600",
+      "map_next_entry_rva": "0x4b2acf3",
+      "client_metadata_sha256": "73635c190058a2687e6718e8cfcf3c41e04b13cfd7b05cadeab3e90294b6afac",
+      "native_library_sha256": "3b47a7a46a8bdc7c0f2cd080f741e4cbc2706853a4320ea4d77f38cd80df4fc3"
     },
     "defaulted_tails": {}
   }

@@ -43,7 +43,7 @@ integration-manifest.json
 
 # Keep only protocol descriptions needed by the code and tests
 /artifacts/*
-!/artifacts/master-schema-pc-1.15.0.json
+!/artifacts/master-schema-pc-1.16.1.json
 !/artifacts/master-schema-play-1.15.0.json
 !/artifacts/master-schema-fanza-1.14.4.json
 !/artifacts/protocol.json

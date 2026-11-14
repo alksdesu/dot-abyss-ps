@@ -234,7 +234,8 @@ def test_supported_pc_identity_is_derived_and_round_trips(manifest_case):
 def test_conflicting_derived_pc_identity_is_rejected(manifest_case):
     root, manifest, profile = manifest_case
     pc = next(client for client in manifest["supported_clients"]
-              if client["package"] == profile["build"]["launcher_product_id"])
+              if client["package"] == profile["build"]["launcher_product_id"]
+              and client["version"] == profile["build"]["application_version"])
     pc["metadata_sha256"] = "0" * 64
     save_manifest(manifest_case)
     with pytest.raises(releases.ReleaseManifestError, match="conflicts"):

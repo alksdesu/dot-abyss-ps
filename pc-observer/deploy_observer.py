@@ -466,7 +466,8 @@ def main() -> None:
     parser.add_argument("--output-root", type=Path, default=PROJECT / "captures")
     parser.add_argument("--expected-package-sha256")
     args = parser.parse_args()
-    release = _load(PROJECT / "pc/releases/pc-1.15.0.json")
+    manifest = _load(PROJECT / "pc/releases/manifest.json")
+    release = _load(PROJECT / manifest["releases"][manifest["default_release"]]["paths"]["legacy_projection"])
     if len(release.get("source_fingerprints", {})) != 44 or release.get("launcher_product_id") != "dotabyss_x_cl":
         parser.error("The reviewed official PC release is unavailable")
     profile = Path(os.environ.get("USERPROFILE", str(Path.home())))

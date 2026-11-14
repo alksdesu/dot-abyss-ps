@@ -45,7 +45,8 @@ def test_native_login_fields_match_apk_response_dto(setup):
     contents = client.post("/login", json={}, headers=headers).json()["contents"]
     document = json.loads((Path(__file__).parents[1] / "artifacts/protocol.json").read_text(encoding="utf-8"))
     typedef = next(item for item in document["types"] if item["full_name"] == "Il2CppProject.Api.RootLoginResponseEntity")
-    assert set(contents) == {field["name"] for field in typedef["fields"]}
+    assert set(contents) == {field["name"] for field in typedef["fields"]} | {"ban_warning"}
+    assert contents["ban_warning"] is None
     assert type(contents["user_id"]) is int
     assert type(contents["token_status"]) is int
     assert isinstance(contents["token"], str)

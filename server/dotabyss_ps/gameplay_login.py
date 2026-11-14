@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from .gameplay_catalog import GameplayError, available, identifiers
+from .gameplay_catalog import GameplayError, available, identifiers, number
 from .gameplay_delivery import deliver
 from .gameplay_login_state import bonus_entry, login_data
 from .gameplay_records import rows
@@ -154,4 +154,10 @@ def history(game, body):
     return {"login_bonus_histories": result, "t_login_thirty_days_bonuses": limited_login_view(game, 92), "t_login_limited_bonuses": limited_login_view(game, 91)}
 
 
-LOGIN_ROUTES = {"api/mypage/login-bonus/history": route("POST", "m_login_bonus_ids", history)}
+def confirm_ban_warning(game, body):
+    number(body["ban_level"], 0)
+    return {}
+
+
+LOGIN_ROUTES = {"api/mypage/login-bonus/history": route("POST", "m_login_bonus_ids", history),
+                "api/ban-warning/confirm": route("POST", "ban_level", confirm_ban_warning)}

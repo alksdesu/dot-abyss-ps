@@ -232,4 +232,4 @@ def test_all_five_event_modes_build_every_actual_battle(battle_catalog):
                                     kind=f"event_{kind.name}", quest_id=definition["id"])
             assert_links(generated)
             assert generated["enemies"]
-    assert count == 221
+    assert count == sum(len(battle_catalog.rows(kind.quests)) for kind in QUEST_KINDS.values()) > 200

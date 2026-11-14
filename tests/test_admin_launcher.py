@@ -18,10 +18,10 @@ from dotabyss_ps.release_manifest import load_manifest, legacy_release
 @pytest.fixture
 def launch_case(tmp_path, monkeypatch):
     root = tmp_path / "project"
-    release = root / "pc" / "releases" / "pc-1.15.0.json"
-    release.parent.mkdir(parents=True)
     manifest = load_manifest()
     profile = manifest["releases"][manifest["default_release"]]
+    release = root / profile["paths"]["local_release"]
+    release.parent.mkdir(parents=True)
     profile["build"]["executable"] = "game.exe"
     (release.parent / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
     release.write_text(json.dumps(legacy_release(profile)), encoding="utf-8")
@@ -56,7 +56,7 @@ def launch_case(tmp_path, monkeypatch):
         processes.append(GameProcess(1234, str(executable), 100.0))
         return Process()
     monkeypatch.setattr(module.subprocess, "Popen", spawn)
-    return SimpleNamespace(root=root, client=client, config=config, store=store, local=local, launcher=launcher, processes=processes,
+    return SimpleNamespace(root=root, release=release, client=client, config=config, store=store, local=local, launcher=launcher, processes=processes,
                            commands=commands, first=first["user_id"], second=second["user_id"], executable=executable)
 
 
@@ -266,8 +266,8 @@ def test_preflight_rejects_unbound_assets_before_changing_profile(launch_case, m
     before = c.config.read_bytes()
     monkeypatch.delattr(c.launcher, "_preflight")
     monkeypatch.setattr(c.local, "_active", lambda: matching_master(c))
-    release = c.root / "pc" / "releases" / "pc-1.15.0.json"
-    release.write_text(json.dumps({**json.loads(release.read_text()), "application_version": "1.15.0"}))
+    release = c.release
+    release.write_text(json.dumps(json.loads(release.read_text())))
     with pytest.raises(GameplayError, match="资源未就绪"):
         c.launcher.start(c.first)
     assert c.config.read_bytes() == before and not c.commands
@@ -282,8 +282,8 @@ def test_preflight_requires_catalog_request_mapping(launch_case, monkeypatch, ex
         c.config.unlink()
     monkeypatch.delattr(c.launcher, "_preflight")
     monkeypatch.setattr(c.local, "_active", lambda: matching_master(c))
-    release = c.root / "pc" / "releases" / "pc-1.15.0.json"
-    release.write_text(json.dumps({**json.loads(release.read_text()), "application_version": "1.15.0"}))
+    release = c.release
+    release.write_text(json.dumps(json.loads(release.read_text())))
     monkeypatch.setattr(module.AssetCatalog, "status", lambda _: {"active": {"revision": "test", **catalog}, "error": ""})
     with pytest.raises(GameplayError, match="catalog 请求路径映射"):
         c.launcher.start(c.first)
@@ -295,8 +295,8 @@ def test_first_launch_creates_nothing_until_full_preflight_succeeds(launch_case,
     c.config.unlink()
     monkeypatch.delattr(c.launcher, "_preflight")
     monkeypatch.setattr(c.local, "_active", lambda: matching_master(c))
-    release = c.root / "pc" / "releases" / "pc-1.15.0.json"
-    release.write_text(json.dumps({**json.loads(release.read_text()), "application_version": "1.15.0"}))
+    release = c.release
+    release.write_text(json.dumps(json.loads(release.read_text())))
     monkeypatch.setattr(module.AssetCatalog, "status", lambda _: {"active": {"catalog_served": True}, "error": ""})
     monkeypatch.setattr(module.AssetCatalog, "active", lambda _: {
         "prefix": module.PC_CATALOG_PREFIX, "catalog": {"relative_path": module.PC_CATALOG_PATH},
@@ -319,8 +319,8 @@ def test_preflight_rejects_served_catalog_bound_to_different_paths(launch_case, 
     c.config.unlink()
     monkeypatch.delattr(c.launcher, "_preflight")
     monkeypatch.setattr(c.local, "_active", lambda: matching_master(c))
-    release = c.root / "pc" / "releases" / "pc-1.15.0.json"
-    release.write_text(json.dumps({**json.loads(release.read_text()), "application_version": "1.15.0"}))
+    release = c.release
+    release.write_text(json.dumps(json.loads(release.read_text())))
     active = {"prefix": module.PC_CATALOG_PREFIX, "catalog": {"relative_path": module.PC_CATALOG_PATH},
               "catalog_hash": {"relative_path": module.PC_CATALOG_HASH_PATH}}
     if wrong_binding == "missing":

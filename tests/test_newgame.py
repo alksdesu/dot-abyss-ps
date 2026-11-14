@@ -23,8 +23,8 @@ PLAY_CLIENT = {
 }
 PC_CLIENT = {
     "package": "dotabyss_x_cl",
-    "version": "1.15.0",
-    "metadata_sha256": "d38f026a769e522b136830785ad2789f834c47127be764f89ab294b4d91f056d",
+    "version": "1.16.1",
+    "metadata_sha256": "73635c190058a2687e6718e8cfcf3c41e04b13cfd7b05cadeab3e90294b6afac",
 }
 
 
@@ -287,7 +287,7 @@ def test_generated_wire_fields_match_exported_client_dtos(master):
     assert user_contents(state)["notifies"] is None
 
 
-@pytest.mark.parametrize("filename", ["master-schema-fanza-1.14.4.json", "master-schema-play-1.15.0.json", "master-schema-pc-1.15.0.json"])
+@pytest.mark.parametrize("filename", ["master-schema-fanza-1.14.4.json", "master-schema-play-1.15.0.json", "master-schema-pc-1.16.1.json"])
 def test_required_master_column_types_match_exported_native_schema(filename):
     source = Path(__file__).resolve().parents[1] / "artifacts" / filename
     if not source.is_file():

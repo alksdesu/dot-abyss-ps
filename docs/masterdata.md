@@ -36,7 +36,20 @@ PC 端使用客户端 `DownloadCache` 中的原始 MessagePack 主数据。首�
 
 当游戏仅更新内容（新增角色、活动、剧情、素材）而客户端二进制结构未变时，只需更新 `content` 并重新导入主数据与资源，安装器会自动跳过 C# 插件重编译。
 
-## 3. HTTP 接口
+## 3. 客户端升级后沿用存档
+
+存档按主数据 revision 绑定；客户端升级带来新主数据时，`setup-pc.ps1` 会先把新主数据暂存，再因存档仍绑定旧 revision 停下并给出重绑命令。只要新旧主数据表结构一致（同一份 schema 能校验两者），就可以把所有存档整体换到新 revision：
+
+```powershell
+.\.venv\Scripts\python.exe -m dotabyss_ps.master_migration --to '<新 revision>'
+.\.venv\Scripts\python.exe -m dotabyss_ps.master_migration --to '<新 revision>' --apply
+```
+
+- 预览列出绑定的存档数、新主数据删掉的行数和存档里引用到被删行的位置；有引用则拒绝执行。
+- `--apply` 先把 `local.sqlite3` 整库备份到 `migration-backups/master-<时间>-<旧>-to-<新>.sqlite3`，再在一个事务里改写 `game_states`、`gameplay_progress` 的绑定并激活新主数据。
+- 之后重新运行 `setup-pc.ps1`，按新 catalog 补导资源。
+
+## 4. HTTP 接口
 
 - `/local/master`：返回当前激活主数据的元信息。
 - `/local/master/<revision>/first.msgpack`：用于诊断读取。

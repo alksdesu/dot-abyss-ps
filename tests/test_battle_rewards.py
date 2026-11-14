@@ -20,8 +20,8 @@ from dotabyss_ps.newgame import build_initial_state
 @pytest.fixture(scope="module")
 def reward_master():
     root = Path(__file__).resolve().parents[1]
-    schema = json.loads((root / "artifacts/master-schema-pc-1.15.0.json").read_text(encoding="utf-8"))
-    blob = root / "data-pc-1.15.0/master/blobs/ee9f68157917ee9601c539f950aaf98ae9b446a54dac66707bc297746efac523.msgpack"
+    schema = json.loads((root / "artifacts/master-schema-pc-1.16.1.json").read_text(encoding="utf-8"))
+    blob = root / "data-pc/master/blobs/079efbae8e920dfb15f4ea49ee04714ee68d43d87ca734e2b30e9ee99155741e.msgpack"
     tables = msgpack.unpackb(blob.read_bytes(), raw=False)
     return tables, schema, GameplayCatalog(tables, schema)
 
