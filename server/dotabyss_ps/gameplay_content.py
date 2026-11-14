@@ -8,6 +8,7 @@ from .gameplay_records import find, put, rows
 from .gameplay_statistics import record_grant
 
 EQUIPMENT = {70: ("weapon", "weapons"), 80: ("armor", "armors"), 90: ("accessory", "accessories")}
+EQUIPMENT_LIMIT = 100
 BALANCES = {10: "free_virtual_money", 50: "gold", 51: "soul", 52: "disaster_coin", 53: "friend_point", 110: "character_exp"}
 
 
@@ -85,10 +86,14 @@ def allocate_id(state, table, progress=None):
     return value
 
 
+def equipment_vacancy(state):
+    return max(0, EQUIPMENT_LIMIT - sum(len(rows(state, "t_" + plural)) for _, plural in EQUIPMENT.values()))
+
+
 def create_equipment(state, kind, identifier, catalog, user_id, progress=None):
     singular, plural = EQUIPMENT[kind]
     master = catalog.get("m_" + plural, identifier)
-    if sum(len(rows(state, "t_" + names[1])) for names in EQUIPMENT.values()) >= 100:
+    if not equipment_vacancy(state):
         raise GameplayError("Equipment inventory is full")
     enchants = roll_enchantments(catalog, kind, identifier)
     minimum = number(master["min_parameter"], 0, 2 ** 32 - 1)
@@ -161,7 +166,7 @@ def apply_rewards(state, rewards, catalog, user_id, now, progress=None):
                 raise GameplayError("Character core recipient is not owned")
             character["limit_break_core_point"] = number(character["limit_break_core_point"] + amount, 0, 2 ** 31 - 1)
         elif kind in EQUIPMENT:
-            if amount > 100:
+            if amount > EQUIPMENT_LIMIT:
                 raise GameplayError("Equipment grant batch is too large", 400, 4007)
             for _ in range(amount):
                 create_equipment(state, kind, identifier, catalog, user_id, progress)

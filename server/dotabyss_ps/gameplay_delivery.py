@@ -1,26 +1,37 @@
 from __future__ import annotations
 
-from .gameplay_content import EQUIPMENT
+from .gameplay_content import EQUIPMENT, equipment_vacancy
 from .gameplay_catalog import GameplayError, number
 from .gameplay_presents import enqueue
 from .gameplay_records import find, grant, rows
+from .gameplay_wallet import timestamp
+
+UNLIMITED = 2 ** 31 - 1
+
+
+def acceptable(game, reward):
+    kind, identifier, amount = reward["content_type"], reward["content_id"], reward["amount"]
+    number(kind, 1, UNLIMITED)
+    number(identifier, 0)
+    number(amount, 1, UNLIMITED)
+    if kind in EQUIPMENT:
+        return min(amount, equipment_vacancy(game.state))
+    if kind == 30:
+        limit = game.catalog.get("m_items", identifier).get("possession_limit", UNLIMITED) or UNLIMITED
+        item = find(game.state, "t_items", m_item_id=identifier)
+        return min(amount, max(0, limit - (item["amount"] if item else 0)))
+    if kind == 33:
+        limit = game.catalog.get("m_limited_items", identifier)["possession_limit"] or UNLIMITED
+        held = sum(r["amount"] for r in rows(game.state, "t_limited_items") if r["m_limited_item_id"] == identifier and timestamp(r["expire_at"]) > game.now)
+        return min(amount, max(0, limit - held))
+    return amount
 
 
 def deliver(game, rewards):
     received, mailed = [], []
     for reward in rewards:
-        kind, identifier, amount = reward["content_type"], reward["content_id"], reward["amount"]
-        number(kind, 1, 2 ** 31 - 1)
-        number(identifier, 0)
-        number(amount, 1, 2 ** 31 - 1)
-        accepted = amount
-        if kind in EQUIPMENT:
-            accepted = min(amount, max(0, 100 - sum(len(rows(game.state, "t_" + plural)) for _, plural in EQUIPMENT.values())))
-        elif kind == 30:
-            definition = game.catalog.get("m_items", identifier)
-            item = find(game.state, "t_items", m_item_id=identifier)
-            limit = definition.get("possession_limit", 2 ** 31 - 1) or 2 ** 31 - 1
-            accepted = min(amount, max(0, limit - (item["amount"] if item else 0)))
+        amount = reward["amount"]
+        accepted = acceptable(game, reward)
         if accepted:
             received.extend(grant(game.state, [{**reward, "amount": accepted}], game.catalog, game.user_id, game.now, game.progress))
         if accepted < amount:

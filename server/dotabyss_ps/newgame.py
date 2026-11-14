@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Any
 
 from .protocol import decode_json
+from .gameplay_content import EQUIPMENT_LIMIT
 from .gameplay_records import OPTIONAL_ROW_FIELDS, validate_optional_records, identity_field
 from .release_manifest import load_manifest
 
@@ -12,7 +13,6 @@ POLICY_VERSION = 5
 SUPPORTED_CLIENTS = tuple(load_manifest()["supported_clients"])
 SUPPORTED_CLIENT = SUPPORTED_CLIENTS[0]
 LOCAL_BUILDING_IDS = (100, 200, 300, 500, 1000)
-EQUIPMENT_LIMIT = 100
 MAX_PARTY_COUNT = 1
 PROLOGUE_COMPLETED = 99
 PROLOGUE_STATES = frozenset(range(16)) | {PROLOGUE_COMPLETED}

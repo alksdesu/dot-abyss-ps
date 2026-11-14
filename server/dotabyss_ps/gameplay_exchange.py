@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from .gameplay_catalog import GameplayError, available, identifiers, number
+from .gameplay_delivery import deliver
 from .gameplay_economy import consume
 from .gameplay_receipts import feature_data
-from .gameplay_records import grant
 from .gameplay_routes import route
 
 
@@ -72,10 +72,9 @@ def execute(game, body):
         raise GameplayError("Exchange purchase limit reached")
     category = game.catalog.get("m_exchange_categories", lineup["m_exchange_category_id"])
     consume(game, [{"content_type": category["cost_content_type"], "content_id": category["cost_content_id"], "amount": lineup["cost_num"] * amount}])
-    acquired = grant(game.state, [{"content_type": lineup["content_type"], "content_id": lineup["content_id"], "amount": lineup["acquire_num"] * amount}],
-                     game.catalog, game.user_id, game.now, game.progress)
+    received, mailed = deliver(game, [{"content_type": lineup["content_type"], "content_id": lineup["content_id"], "amount": lineup["acquire_num"] * amount}])
     saved["count"] = number(saved["count"] + amount, 0, 2 ** 31 - 1)
-    return {"result": {"update_lineups": {"m_exchange_lineup_id": identifier, "exchange_count": saved["count"]}, "acquire_contents": acquired}}
+    return {"result": {"update_lineups": {"m_exchange_lineup_id": identifier, "exchange_count": saved["count"]}, "acquire_contents": received + mailed}}
 
 
 EXCHANGE_ROUTES = {

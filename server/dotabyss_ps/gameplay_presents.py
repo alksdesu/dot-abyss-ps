@@ -53,17 +53,22 @@ def present_count(game):
     return sum(entry["accepted_at"] is None and available(entry, game.now, "begin_at", "end_at") for entry in visible_presents(game))
 
 
+def append_entry(entries, fields):
+    if len(entries) >= 10000:
+        raise GameplayError("Present storage is full", 413, 4130)
+    entry = {**fields, "id": max((r["id"] for r in entries), default=0) + 1}
+    entries.append(entry)
+    return entry
+
+
 def enqueue(game, rewards, title="Inventory overflow"):
     entries = presents(game)
     for reward in rewards:
         if reward["content_type"] not in PRESENT_CONTENT_TYPES:
             raise GameplayError("Reward cannot be displayed in the native present box", 503, 5036)
-        if len(entries) >= 10000:
-            raise GameplayError("Present storage is full", 413, 4130)
-        entries.append({"id": max((r["id"] for r in entries), default=0) + 1, **reward,
-                        "begin_at": game.now.isoformat(), "end_at": None, "accepted_at": None,
-                        "m_present_title_id": 0, "m_present_message_id": 0, "title": title,
-                        "message": "Items are available here when inventory space is free.", "is_subscription": 0})
+        append_entry(entries, {**reward, "begin_at": game.now.isoformat(), "end_at": None, "accepted_at": None,
+                               "m_present_title_id": 0, "m_present_message_id": 0, "title": title,
+                               "message": "Items are available here when inventory space is free.", "is_subscription": 0})
 
 
 def present_list(game, body):
@@ -79,6 +84,8 @@ def present_list(game, body):
 
 
 def present_receive(game, body):
+    from .gameplay_delivery import acceptable
+
     selected = identifiers(body["ids"], 1000)
     if not selected:
         raise GameplayError("No presents were selected", 400, 4007)
@@ -88,13 +95,27 @@ def present_receive(game, body):
         raise GameplayError("Present is not owned")
     if any(by_id[i]["accepted_at"] is None and not available(by_id[i], game.now, "begin_at", "end_at") for i in selected):
         raise GameplayError("Present is outside its availability period")
-    rewards = [{k: by_id[i][k] for k in ("content_type", "content_id", "amount")} for i in selected if by_id[i]["accepted_at"] is None]
-    grant(game.state, rewards, game.catalog, game.user_id, game.now, game.progress)
+    received, kept = [], []
     for identifier in selected:
-        if by_id[identifier]["accepted_at"] is None:
-            by_id[identifier]["accepted_at"] = game.now.isoformat()
-    return {"present_list": None,
-            "received_list": copy.deepcopy([by_id[i] for i in selected if by_id[i]["content_type"] in PRESENT_CONTENT_TYPES])}
+        entry = by_id[identifier]
+        if entry["accepted_at"] is not None:
+            received.append(entry)
+            continue
+        content = {k: entry[k] for k in ("content_type", "content_id", "amount")}
+        accepted = acceptable(game, content)
+        if not accepted:
+            kept.append(entry)
+            continue
+        if accepted < entry["amount"]:
+            # The client marks a present as pending by id, so the remainder keeps the original row and the received part gets a new one.
+            entry["amount"] -= accepted
+            kept.append(entry)
+            entry = append_entry(entries, {**entry, "amount": accepted})
+        grant(game.state, [{**content, "amount": accepted}], game.catalog, game.user_id, game.now, game.progress)
+        entry["accepted_at"] = game.now.isoformat()
+        received.append(entry)
+    displayable = [r for r in received if r["content_type"] in PRESENT_CONTENT_TYPES]
+    return {"present_list": copy.deepcopy(kept) or None, "received_list": copy.deepcopy(displayable)}
 
 
 PRESENT_ROUTES = {

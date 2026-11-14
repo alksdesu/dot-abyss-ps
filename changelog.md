@@ -2,6 +2,33 @@
 
 记录客户端适配版本、构建环境与内容快照。玩法与使用说明见 [文档目录](docs/README.md)。
 
+## 2026-11-15
+
+### 客户端支持
+
+| 客户端 | 版本 | 支持范围 | 结构描述 |
+| --- | --- | --- | --- |
+| Windows x64 PC，`dotabyss_x_cl` | **1.16.1** | 主要适配目标：常驻养成、主线与教程、战斗模式、活动、启动器与管理功能 | [PC schema](artifacts/master-schema-pc-1.16.1.json) |
+| Android Google Play，`com.exnoa.abyss` | 1.15.0 | 基础协议与主数据兼容 | [Play schema](artifacts/master-schema-play-1.15.0.json) |
+| Android FANZA MOD，`jp.co.fanzagames.dotabyss_x_a.mod` | 1.14.4 | 协议诊断 | [FANZA schema](artifacts/master-schema-fanza-1.14.4.json) |
+
+PC release 标识为 `pc-1.16.1-73635c19`，默认本机 release 配置为 `pc/releases/pc-1.16.1.json`，数据目录为 `data-pc`。对应 metadata SHA-256 为 `73635c190058a2687e6718e8cfcf3c41e04b13cfd7b05cadeab3e90294b6afac`。1.15.0 的 PC 构建保留在客户端支持列表中作为历史记录；观察器仍绑定 1.15.0。
+
+### 更新内容
+
+- 适配 PC 1.16.1：登录结果带 `ban_warning`（本地固定为空），新增 `api/ban-warning/confirm`；插件登录钩子改为返回新的 `LoginResultModel`。367 张必需主表的字段布局与 1.15.0 相同。
+- 新增 `python -m dotabyss_ps.master_migration --to <revision> --apply`：客户端升级后把已有存档重绑到新主数据版本，先检查存档是否引用被删除的行，执行前整库备份到 `migration-backups/`。`setup-pc.ps1` 在数据目录已有其他版本时给出该命令。
+- 礼物箱领取改为部分领取：装备、道具、限时道具按剩余容量领取，领不下的留在礼物箱并由客户端提示所持上限，不再整单报错；交换所换到装备时满仓的部分进礼物箱。装备持有上限集中为一处定义。
+
+### 内容快照
+
+| 活动类型 | 主表记录 |
+| --- | --- |
+| 采矿 | 6 期、42 关 |
+| 狩猎 | 5 期、70 关 |
+
+合计 32 个活动配置（新增第 6 回クリスタルハント、第 5 回鏡影の回廊），86 个卡池组（新增アシュリー、ファリス、エアリエル ピックアップ），85 名角色（新增アシュリー、ファリス），1,778 条任务、120 个任务期，18 期遭遇活动不变。默认规则 `event_open_all=1` 开放全部活动与卡池；控制台可按活动参加、设置次数、重置，并修改卡池计数、保底与里程。
+
 ## 2026-11-14
 
 - 本地缓存缺少背景预制体的活动不再加载失败：服务端按资源清单列出缺失名单，插件用同名剧情底图或纯色搭替代背景，`EnableMissingEventBackgrounds` 可关。

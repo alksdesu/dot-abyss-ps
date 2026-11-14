@@ -191,3 +191,76 @@ def test_selectable_box_overflow_goes_to_presents_without_losing_items(setup_gam
     entries = call(c, "api/present/list/1/0", method="GET")["present_list"]
     assert any(r["content_id"] == choice["content_id"] and r["amount"] == choice["amount"] for r in entries)
     assert next(r["amount"] for r in records(c)["t_items"]["up"] if r["m_item_id"] == 190003) == 0
+
+
+def fill_equipment(context):
+    from dotabyss_ps.gameplay_content import EQUIPMENT, EQUIPMENT_LIMIT
+    data = records(context)
+    owned = sum(len(data["t_" + plural]["up"]) for _, plural in EQUIPMENT.values())
+    give(context, [{"content_type": 70, "content_id": 11010110, "amount": EQUIPMENT_LIMIT - owned}])
+    return EQUIPMENT_LIMIT
+
+
+def mail(context, rewards):
+    call(context, "api/present/list/1/0", method="GET")
+
+    def push(state, progress):
+        entries = progress["features"]["presents"]["data"]["entries"]
+        for reward in rewards:
+            entries.append({"id": max(r["id"] for r in entries) + 1, **reward, "begin_at": NOW.isoformat(), "end_at": None, "accepted_at": None,
+                            "m_present_title_id": 0, "m_present_message_id": 0, "title": "Test mail", "message": "Test mail", "is_subscription": 0})
+    update(context, push)
+
+
+def test_present_receive_keeps_equipment_pending_while_the_inventory_is_full(setup_gameplay):
+    c = setup_gameplay
+    limit = fill_equipment(c)
+    gold = next(r for r in call(c, "api/present/list/1/0", method="GET")["present_list"] if r["content_type"] == 50)
+    mail(c, [{"content_type": 70, "content_id": 11010110, "amount": 1}, {"content_type": 30, "content_id": 50001, "amount": 3}])
+    pending = call(c, "api/present/list/1/0", method="GET")["present_list"]
+    weapon = next(r for r in pending if r["content_type"] == 70)
+    potion = next(r for r in pending if r["content_type"] == 30 and r["content_id"] == 50001)
+    result = call(c, "api/present/receive", {"ids": [weapon["id"], gold["id"], potion["id"]]})
+    assert [r["id"] for r in result["present_list"]] == [weapon["id"]]
+    assert [r["id"] for r in result["received_list"]] == [gold["id"], potion["id"]]
+    assert all(r["accepted_at"] for r in result["received_list"])
+    data = records(c)
+    assert len(data["t_weapons"]["up"]) == limit
+    assert next(r["amount"] for r in data["t_items"]["up"] if r["m_item_id"] == 50001) == 3
+    assert weapon["id"] in {r["id"] for r in call(c, "api/present/list/1/0", method="GET")["present_list"]}
+    body = {"t_weapon_ids": [data["t_weapons"]["up"][0]["id"]], "t_armor_ids": [], "t_accessory_ids": []}
+    call(c, "api/equipment/disassembly/execute", body)
+    result = call(c, "api/present/receive", {"ids": [weapon["id"]]})
+    assert result["present_list"] is None and [r["id"] for r in result["received_list"]] == [weapon["id"]]
+    assert len(records(c)["t_weapons"]["up"]) == limit
+
+
+def test_present_receive_splits_items_at_their_possession_limit(setup_gameplay):
+    c = setup_gameplay
+    master = GameplayCatalog(c.tables, c.schema)
+    limit = master.get("m_items", 60001)["possession_limit"]
+    seed(c, items={60001: limit - 2})
+    mail(c, [{"content_type": 30, "content_id": 60001, "amount": 5}])
+    entry = next(r for r in call(c, "api/present/list/1/0", method="GET")["present_list"] if r["content_id"] == 60001)
+    result = call(c, "api/present/receive", {"ids": [entry["id"]]})
+    assert [(r["id"], r["amount"]) for r in result["present_list"]] == [(entry["id"], 3)]
+    assert [(r["amount"], r["content_id"]) for r in result["received_list"]] == [(2, 60001)]
+    assert result["received_list"][0]["id"] != entry["id"]
+    assert next(r["amount"] for r in records(c)["t_items"]["up"] if r["m_item_id"] == 60001) == limit
+    history = call(c, "api/present/list/99/0", method="GET")["received_list"]
+    assert any(r["id"] == result["received_list"][0]["id"] and r["amount"] == 2 for r in history)
+    before = snapshot(c)
+    result = call(c, "api/present/receive", {"ids": [entry["id"]]})
+    assert [(r["id"], r["amount"]) for r in result["present_list"]] == [(entry["id"], 3)] and result["received_list"] == []
+    assert snapshot(c) == before
+
+
+def test_exchange_overflow_mails_equipment_instead_of_failing(setup_gameplay):
+    c = setup_gameplay
+    limit = fill_equipment(c)
+    give(c, [{"content_type": 54, "content_id": 3005, "amount": 500}])
+    result = call(c, "api/exchange/execute", {"m_exchange_lineup_id": 30000607, "exchange_count": 1})
+    assert result["result"]["acquire_contents"] == [{"content_type": 70, "content_id": 13010431, "amount": 1}]
+    assert len(records(c)["t_weapons"]["up"]) == limit
+    mailed = [r for r in call(c, "api/present/list/1/0", method="GET")["present_list"] if r["content_type"] == 70 and r["content_id"] == 13010431]
+    assert len(mailed) == 1 and mailed[0]["amount"] == 1
