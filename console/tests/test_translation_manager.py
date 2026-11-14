@@ -229,3 +229,44 @@ def test_missing_plugin_file_is_not_a_complete_installation(context):
     (context.manager.target / "Utility.dll").unlink()
     result = context.manager.status()
     assert not result["installed"] and not result["enabled"]
+
+
+MOD_CONFIG = (
+    "## Settings file was created by plugin AbyssMod v1.2.0\n\n[General]\n\n## 是否启用游戏内动态马赛克\n"
+    "# Setting type: Boolean\n# Default value: false\nDynamicMosaic = true\n\nSoundCaution = true\n\n"
+    "[Translation]\nEnabled = true\nLanguage = zh_Hant\n"
+)
+
+
+def test_dynamic_mosaic_switch_rewrites_one_line_and_reports_state(context):
+    installed(context)
+    context.manager.config.write_text(MOD_CONFIG, encoding="utf-8")
+    assert context.manager.status()["dynamic_mosaic"] is True
+    result = context.manager.set_dynamic_mosaic(False)
+    assert result["dynamic_mosaic"] is False and result["installed"]
+    written = context.manager.config.read_text(encoding="utf-8")
+    assert written == MOD_CONFIG.replace("DynamicMosaic = true", "DynamicMosaic = false")
+    assert context.manager.set_dynamic_mosaic(True)["dynamic_mosaic"] is True
+    assert context.manager.config.read_text(encoding="utf-8") == MOD_CONFIG
+
+
+def test_dynamic_mosaic_switch_needs_the_plugin_and_a_boolean(context):
+    with pytest.raises(ConsoleError) as missing:
+        context.manager.set_dynamic_mosaic(False)
+    assert missing.value.status == 409
+    installed(context)
+    with pytest.raises(ConsoleError) as typed:
+        context.manager.set_dynamic_mosaic("false")
+    assert typed.value.status == 400
+    assert context.manager.status()["dynamic_mosaic"] is False
+
+
+@pytest.mark.parametrize("original,expected", [
+    (None, "[General]\nDynamicMosaic = false\n"),
+    (b"[Translation]\nEnabled = true\n", "[Translation]\nEnabled = true\n\n[General]\nDynamicMosaic = false\n"),
+    (b"[general]\nSoundCaution = true\n\n[Translation]\nEnabled = true\n",
+     "[general]\nSoundCaution = true\nDynamicMosaic = false\n\n[Translation]\nEnabled = true\n"),
+    (b"\xef\xbb\xbf[General]\ndynamicmosaic=true # note\n", "[General]\nDynamicMosaic = false\n"),
+])
+def test_setting_is_placed_inside_its_section_without_touching_the_rest(original, expected):
+    assert module.with_setting(original, "General", "DynamicMosaic", "false").decode("utf-8") == expected

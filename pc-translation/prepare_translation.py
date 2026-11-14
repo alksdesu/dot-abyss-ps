@@ -23,7 +23,7 @@ DEPENDENCIES = {
     "ttcuyuanj": "24564ecd227b6d1d300e7e2b0ff7984729fd984e323cf69a60cb6e3d51ba5820",
 }
 CONFIG = """[General]
-DynamicMosaic = true
+DynamicMosaic = false
 SoundCaution = true
 VoiceInterruption = true
 TitleMovie = true

@@ -162,3 +162,46 @@ test("demo installation and update complete without changing service state or us
   assert.equal((await request("/host/status")).state, "stopped");
   assert.match((await request("/host/translation/logs")).text, /演示翻译安装完成/);
 });
+
+test("the mosaic switch follows the installed plugin and is gated like the install button", () => {
+  assert.equal(translationPolicy(null).canToggleMosaic, false);
+  assert.equal(translationPolicy(ready).canToggleMosaic, false);
+  assert.equal(translationPolicy(complete).canToggleMosaic, true);
+  assert.equal(translationPolicy(complete).mosaic, false);
+  assert.equal(translationPolicy({ ...complete, dynamic_mosaic: true }).mosaic, true);
+  assert.equal(translationPolicy({ ...complete, game_running: true }).canToggleMosaic, true);
+  assert.equal(translationPolicy(running).canToggleMosaic, false);
+  assert.equal(translationPolicy(complete, false, "offline").canToggleMosaic, false);
+});
+
+test("turning the mosaic sends one boolean and keeps the returned status", async () => {
+  const sent = [];
+  const translation = translationCoordinator({ request: async (path, body) => {
+    if (path === "/host/translation/status") return complete;
+    if (path === "/host/translation/mosaic") { sent.push(body); return { ...complete, dynamic_mosaic: body.enabled }; }
+    throw new Error(path);
+  } });
+  assert.equal(await translation.mosaic(true), false);
+  await translation.refresh();
+  assert.equal(await translation.mosaic(true), true);
+  assert.deepEqual(sent, [{ enabled: true }]);
+  assert.equal(translation.state.status.dynamic_mosaic, true);
+  assert.equal(translation.state.submitting, false);
+  assert.equal(await translation.mosaic(false), true);
+  assert.equal(translation.state.status.dynamic_mosaic, false);
+});
+
+test("demo mosaic switch needs the demo translation and is remembered", async () => {
+  const request = demoRequest();
+  const translation = translationCoordinator({ request });
+  await translation.refresh();
+  assert.equal(await translation.mosaic(true), false);
+  await translation.start();
+  for (let step = 0; step < 5; step++) await translation.refresh();
+  assert.equal(translation.state.status.dynamic_mosaic, false);
+  assert.equal(await translation.mosaic(true), true);
+  assert.equal(translation.state.status.dynamic_mosaic, true);
+  await translation.refresh();
+  assert.equal(translation.state.status.dynamic_mosaic, true);
+  assert.match((await request("/host/translation/logs")).text, /动态马赛克已打开/);
+});

@@ -28,6 +28,10 @@ class Translation:
         self.call("logs")
         return {"text": "fixture logs", "path": None}
 
+    def set_dynamic_mosaic(self, enabled):
+        self.call(("mosaic", enabled))
+        return {"state": "ready", "can_start": True, "dynamic_mosaic": enabled}
+
 
 @pytest.fixture
 def client():
@@ -39,7 +43,7 @@ def client():
         yield client
 
 
-@pytest.mark.parametrize("method,path", [("GET", "status"), ("GET", "logs"), ("POST", "install")])
+@pytest.mark.parametrize("method,path", [("GET", "status"), ("GET", "logs"), ("POST", "install"), ("POST", "mosaic")])
 def test_translation_routes_require_authentication(client, method, path):
     response = client.request(method, "/host/translation/" + path, json={} if method == "POST" else None)
     assert response.status_code in (401, 403)
@@ -76,3 +80,15 @@ def test_older_host_without_translation_has_clear_error_and_service_still_works(
     with TestClient(app, base_url=ORIGIN, client=("127.0.0.1", 10001)) as client:
         assert client.get("/host/translation/status", headers=NATIVE).status_code == 503
         assert client.get("/host/status", headers=NATIVE).status_code == 200
+
+
+def test_mosaic_switch_passes_only_a_boolean_to_the_manager(client):
+    response = client.post("/host/translation/mosaic", headers=NATIVE, json={"enabled": False})
+    assert response.status_code == 200 and response.json()["dynamic_mosaic"] is False
+    assert client.translation.calls == [("mosaic", False)]
+
+
+@pytest.mark.parametrize("body", [{}, {"enabled": "false"}, {"enabled": 0}, {"enabled": True, "client": "C:/x"}, []])
+def test_mosaic_switch_rejects_anything_but_a_boolean(client, body):
+    response = client.post("/host/translation/mosaic", headers=NATIVE, json=body)
+    assert response.status_code == 400 and client.translation.calls == []

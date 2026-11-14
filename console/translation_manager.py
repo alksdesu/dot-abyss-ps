@@ -24,6 +24,37 @@ PHASE_MESSAGES = {
     "install": "正在备份并安装翻译…", "complete": "繁体翻译已安装，下次启动游戏生效。",
 }
 BUSY_MESSAGE = "客户端正在启动或更新，请稍候。"
+MOSAIC_SECTION, MOSAIC_KEY = "General", "DynamicMosaic"
+
+
+def with_setting(original, section, key, value):
+    # Only the one line changes, so whatever the mod's own menu wrote around it survives.
+    result, inside, found, done = [], False, False, False
+
+    def place():
+        at = len(result)
+        while at and not result[at - 1].strip():
+            at -= 1
+        result.insert(at, key + " = " + value)
+
+    for line in (original.decode("utf-8-sig").splitlines() if original else []):
+        heading = re.fullmatch(r"\s*\[([^]]+)\]\s*(?:[;#].*)?", line)
+        if heading:
+            if inside and not done:
+                place()
+                done = True
+            inside = heading[1].casefold() == section.casefold()
+            found = found or inside
+        elif (inside and not done and "=" in line and not line.lstrip().startswith(("#", ";"))
+              and line.split("=", 1)[0].strip().casefold() == key.casefold()):
+            line = key + " = " + value
+            done = True
+        result.append(line)
+    if not done:
+        if not found:
+            result.extend(["", "[" + section + "]"] if result else ["[" + section + "]"])
+        result.append(key + " = " + value)
+    return ("\n".join(result).rstrip() + "\n").encode("utf-8")
 
 
 def read_object(path, limit=4 * 1024 * 1024):
@@ -41,6 +72,7 @@ class TranslationManager:
         self.client = default_client_dir(self.root)
         self.identity = default_release(self.root)["build"]["identity"]
         self.target = self.client / "BepInEx" / "plugins" / "AbyssMod"
+        self.config = self.client / "BepInEx" / "config" / "AbyssMod.cfg"
         self.jobs = self.root / "artifacts" / "translation" / "jobs"
         self.process = None
         self.job = None
@@ -79,7 +111,7 @@ class TranslationManager:
 
     def _installed(self):
         result = {"installed": False, "enabled": False, "language": "zh_Hant", "plugin_version": None,
-                  "translation_revision": None}
+                  "translation_revision": None, "dynamic_mosaic": False}
         try:
             report = read_object(self.target / "integration-manifest.json")
             required = ("AbyssMod.dll", "Utility.dll", "fonts/ttcuyuanj", "cache/translations/manifest/zh_Hant.json")
@@ -89,9 +121,11 @@ class TranslationManager:
                 result["translation_revision"] = revision
             result["plugin_version"] = "1.2.0" if result["installed"] else None
             config = configparser.ConfigParser(interpolation=None, strict=False)
-            config.read(self.client / "BepInEx" / "config" / "AbyssMod.cfg", encoding="utf-8-sig")
+            config.read(self.config, encoding="utf-8-sig")
             result["enabled"] = (result["installed"] and config.getboolean("Translation", "Enabled", fallback=False)
                                  and config.get("Translation", "Language", fallback="") == "zh_Hant")
+            # The mod's own default when the key is missing.
+            result["dynamic_mosaic"] = config.getboolean(MOSAIC_SECTION, MOSAIC_KEY, fallback=False)
         except (OSError, ValueError, TypeError, configparser.Error):
             pass
         return result
@@ -186,6 +220,22 @@ class TranslationManager:
                 self.job.update(state="failed", phase="failed", message="无法启动翻译任务：" + str(error))
                 self._save()
                 raise ConsoleError("无法启动翻译任务：" + str(error), 503) from error
+            return self.status()
+
+    def set_dynamic_mosaic(self, enabled):
+        if not isinstance(enabled, bool):
+            raise ConsoleError("动态马赛克开关需要 true 或 false", 400)
+        with self._lock:
+            if not self._installed()["installed"]:
+                raise ConsoleError("请先安装繁体翻译插件，再调整动态马赛克。", 409)
+            try:
+                original = self.config.read_bytes() if self.config.exists() else None
+                self.config.parent.mkdir(parents=True, exist_ok=True)
+                temporary = self.config.with_suffix(".cfg.partial")
+                temporary.write_bytes(with_setting(original, MOSAIC_SECTION, MOSAIC_KEY, str(enabled).lower()))
+                temporary.replace(self.config)
+            except OSError as error:
+                raise ConsoleError("无法写入翻译插件配置，请检查目录权限。", 503) from error
             return self.status()
 
     def logs(self):

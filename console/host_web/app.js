@@ -6,7 +6,7 @@
   const simulated = demo ? demoRequest() : null;
   const allowed = new Set(["/host/auth", "/host/status", "/host/logs", "/host/console-ticket",
     "/host/service/start", "/host/service/stop", "/host/service/restart",
-    "/host/translation/status", "/host/translation/install", "/host/translation/logs"]);
+    "/host/translation/status", "/host/translation/install", "/host/translation/logs", "/host/translation/mosaic"]);
   let frameUrl = "";
   let dismissed = "";
   let readingLogs = false;
@@ -113,6 +113,8 @@
     $("install-translation").textContent = display.action;
     $("install-translation").title = display.message;
     $("refresh-translation").disabled = state.submitting || state.checking;
+    $("dynamic-mosaic").checked = display.mosaic;
+    $("dynamic-mosaic").disabled = !display.canToggleMosaic || state.submitting;
     $("translation-phase").textContent = state.submitting ? "正在提交任务…" : status.message || "尚未开始";
     $("translation-percent").textContent = `${state.submitting ? 0 : display.percent}%`;
     $("translation-progress").value = state.submitting ? 0 : display.percent;
@@ -173,6 +175,7 @@
     translation.start();
   });
   $("toggle-translation").addEventListener("click", () => setTranslationDetails($("translation-details").hidden));
+  $("dynamic-mosaic").addEventListener("change", () => translation.mosaic($("dynamic-mosaic").checked));
   $("refresh-translation").addEventListener("click", () => translation.refresh());
   $("refresh-translation-logs").addEventListener("click", loadTranslationLogs);
   $("log-panel").addEventListener("toggle", () => { if ($("log-panel").open) loadLogs(); });

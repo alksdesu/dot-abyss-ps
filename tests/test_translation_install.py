@@ -367,3 +367,9 @@ def test_release_download_rejects_external_or_plaintext_redirects():
     for url in ("http://github.com/release", "https://attacker.example/payload", "https://github.com@attacker.example/file"):
         with pytest.raises(ValueError, match="redirect"):
             redirect.redirect_request(Request(bootstrap.RELEASE_URL), None, 302, "", {}, url)
+
+
+def test_fresh_config_leaves_the_run_time_mosaic_off():
+    fresh = install.translation_config(None).decode("utf-8")
+    assert "[General]\nDynamicMosaic = false" in fresh
+    assert "Language = zh_Hant" in fresh

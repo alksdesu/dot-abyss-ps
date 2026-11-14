@@ -197,6 +197,8 @@
       running,
       failed,
       canStart: !!status?.can_start && !running && !blocked && !error,
+      canToggleMosaic: installed && !running && !error,
+      mosaic: installed && !!status.dynamic_mosaic,
       action: running ? "正在处理…" : installed ? "更新翻译" : "一键安装",
       tone: failed ? "error" : blocked ? "warning" : installed && status.enabled ? "good" : "muted",
       message: error || (status?.game_running ? "请先退出游戏，再安装或更新翻译。" : "") ||
@@ -257,7 +259,27 @@
         }
       }
     }
-    return { state, refresh, start };
+    async function mosaic(enabled) {
+      if (!translationPolicy(state.status, state.submitting, state.error).canToggleMosaic) return false;
+      const current = ++generation;
+      state.submitting = true;
+      state.checking = false;
+      state.error = "";
+      emit();
+      try {
+        accept(await request("/host/translation/mosaic", { enabled: !!enabled }), current);
+        return true;
+      } catch (failure) {
+        if (current === generation) state.error = failure.message || String(failure);
+        return false;
+      } finally {
+        if (current === generation) {
+          state.submitting = false;
+          emit();
+        }
+      }
+    }
+    return { state, refresh, start, mosaic };
   }
 
   function demoRequest() {
@@ -269,6 +291,7 @@
     let translationStep = 0;
     let translated = false;
     let translating = false;
+    let mosaic = false;
     const phases = [
       ["preparing", "准备翻译环境", 5], ["sources", "读取译文与插件源码", 25],
       ["dependencies", "校验字体和依赖", 50], ["build", "构建兼容插件", 75],
@@ -283,7 +306,7 @@
         phase: translationJob ? phase : "idle", percent: translationJob ? percent : 0,
         job_id: translationJob ? `demo-translation-${translationJob}` : null,
         plugin_version: translated ? "1.2.0" : null, translation_revision: translated ? "demo-revision" : null,
-        restart_required: translated,
+        restart_required: translated, dynamic_mosaic: translated && mosaic,
       };
     };
     const status = () => ({
@@ -293,7 +316,13 @@
       log_path: "演示日志", message: running ? "演示服务已就绪。" : "点击启动，查看完整控制台。",
       instance: String(instance),
     });
-    return async (path) => {
+    return async (path, body) => {
+      if (path === "/host/translation/mosaic") {
+        if (!translated) throw new Error("请先安装演示翻译。");
+        mosaic = body?.enabled === true;
+        translationLog.push(mosaic ? "动态马赛克已打开。" : "动态马赛克已关闭。");
+        return translationStatus();
+      }
       if (path === "/host/translation/status") {
         if (translating) {
           translationStep = Math.min(translationStep + 1, phases.length - 1);

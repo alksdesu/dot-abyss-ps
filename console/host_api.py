@@ -256,6 +256,15 @@ def create_host_app(manager, native_secret, translation=None):
         await read_body(request)
         return await invoke(translation_service().install)
 
+    @app.post("/host/translation/mosaic")
+    async def translation_mosaic(request: Request):
+        authorize(request)
+        data = await read_body(request, ("enabled",))
+        if not isinstance(data.get("enabled"), bool):
+            raise ConsoleError("动态马赛克开关需要 true 或 false", 400)
+        service = translation_service()
+        return await invoke(lambda: service.set_dynamic_mosaic(data["enabled"]))
+
     app.mount("/demo-console", StaticFiles(directory=DEMO_WEB_DIR, html=True, check_dir=False), name="demo-console")
     app.mount("/", StaticFiles(directory=HOST_WEB_DIR, html=True, check_dir=False), name="host-web")
     return app

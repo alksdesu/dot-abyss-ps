@@ -27,7 +27,7 @@
       <section class="translation-bar" aria-label="繁体翻译">
         <div class="translation-heading"><strong>繁体中文</strong><span id="translation-dot" class="status-dot muted"></span><span id="translation-state" role="status" aria-live="polite">等待检查</span></div>
         <p id="translation-hint">安装繁体译文、字体和兼容插件，完成后重新启动游戏生效。</p>
-        <div class="translation-actions"><button id="install-translation" class="button" disabled>一键安装</button><button id="toggle-translation" class="button quiet" aria-expanded="false" aria-controls="translation-details">详情</button></div>
+        <div class="translation-actions"><button id="install-translation" class="button" disabled>一键安装</button><label class="switch" title="游戏运行时叠在 H 场景上的格子；关掉后只剩原图里画好的码。改完重开游戏生效。"><input id="dynamic-mosaic" type="checkbox" disabled>动态马赛克</label><button id="toggle-translation" class="button quiet" aria-expanded="false" aria-controls="translation-details">详情</button></div>
       </section>
       <section id="translation-details" class="translation-details" aria-label="翻译安装详情" hidden>
         <div class="translation-progress"><label id="translation-phase" for="translation-progress">尚未开始</label><span id="translation-percent">0%</span><progress id="translation-progress" max="100" value="0"></progress></div>
