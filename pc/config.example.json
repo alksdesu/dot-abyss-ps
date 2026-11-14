@@ -4,5 +4,6 @@
   "ExpectedCompany": "LocalGames",
   "ExpectedProduct": "DotAbyssLocalPlayer",
   "ExpectedPersistentPath": "C:\\Users\\YourName\\AppData\\LocalLow\\LocalGames\\DotAbyssLocalPlayer",
-  "TimeoutSeconds": 20
+  "TimeoutSeconds": 20,
+  "EnableMissingEventBackgrounds": true
 }

@@ -55,6 +55,14 @@ internal sealed class LocalSession : IDisposable
         binding.VerifyCatalogHash(payload.AsSpan(0, used));
     }
 
+    internal EventBackgroundPolicy GetEventBackgroundPolicy()
+    {
+        using var response = client.GetAsync("/local/event-backgrounds").ConfigureAwait(false).GetAwaiter().GetResult();
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return EventBackgroundPolicy.Empty;
+        response.EnsureSuccessStatusCode();
+        return EventBackgroundPolicy.Parse(response.Content.ReadAsByteArrayAsync().ConfigureAwait(false).GetAwaiter().GetResult());
+    }
+
     internal static ContentBinding VerifyBinding(JsonElement status) => ContentBinding.Parse(status);
 
     internal void RegisterRuntime(string appCode, string bundle, string applicationVersion)

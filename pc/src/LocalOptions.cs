@@ -11,6 +11,7 @@ internal sealed record LocalOptions
     public string ExpectedProduct { get; init; } = ClientBuildProfile.IdentityProduct;
     public string ExpectedPersistentPath { get; init; } = "";
     public int TimeoutSeconds { get; init; } = 20;
+    public bool EnableMissingEventBackgrounds { get; init; } = true;
 
     internal static LocalOptions Load(string path)
     {

@@ -8,6 +8,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="..\src\LocalOptions.cs" Link="LocalOptions.cs" />
+    <Compile Include="..\src\EventBackgroundPolicy.cs" Link="EventBackgroundPolicy.cs" />
     <Compile Include="..\src\TransportPolicy.cs" Link="TransportPolicy.cs" />
     <Compile Include="..\src\LocalSession.cs" Link="LocalSession.cs" />
     <Compile Include="..\src\AdminSyncProtocol.cs" Link="AdminSyncProtocol.cs" />

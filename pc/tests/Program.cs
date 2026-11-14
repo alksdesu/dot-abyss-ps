@@ -11,6 +11,12 @@ if (args.SequenceEqual(new[] { "--content-binding" }))
     return;
 }
 
+if (args.SequenceEqual(new[] { "--event-backgrounds" }))
+{
+    EventBackgroundChecks.Run();
+    return;
+}
+
 if (args.SequenceEqual(new[] { "--character-levels" }))
 {
     CharacterLevelChecks.Run();

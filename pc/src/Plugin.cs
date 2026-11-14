@@ -86,6 +86,7 @@ public sealed class Plugin : BasePlugin
         Add(typeof(ApiCrypt), "DecryptLaravel", new[] { typeof(string) }, typeof(TransportPatches), nameof(TransportPatches.DecryptSession));
         Add(typeof(ApiManager), "Response", new[] { typeof(ApiResponseData) }, typeof(TransportPatches), nameof(TransportPatches.Response));
         AssetPatches.Install(Add);
+        EventBackgroundPatches.Install(Add);
         TermsPatches.Install(Add);
         LoginPatches.Install(Add);
         PaymentPatches.Install(Add);

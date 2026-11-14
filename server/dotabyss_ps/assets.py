@@ -404,6 +404,36 @@ class AssetCatalog:
             raise MissingAssetError("Missing indexed asset: " + path[:180])
         return entry, self._read_blob(entry), manifest["revision"]
 
+    def event_backgrounds(self) -> dict:
+        manifest = self.active()
+        if manifest is None:
+            return {"asset_revision": None, "backgrounds": []}
+        self._check_binding(manifest)
+        if manifest["master"]["client"]["package"] != "dotabyss_x_cl":
+            return {"asset_revision": None, "backgrounds": []}
+        prefix = re.escape(manifest["prefix"] + "/")
+        prefab = re.compile(prefix + r"general-ui-bg-event_assets_assets_project_lazyassets_general_ui_bg_event_([a-z0-9_]{1,64})_[0-9a-f]{32}\.bundle")
+        image = re.compile(prefix + r"general-ui-bg-novel_assets_assets_project_lazyassets_general_ui_bg_novel_([a-z0-9_]{1,64})\.png_[0-9a-f]{32}\.bundle")
+        entries = manifest["entries"]
+        present = {match[1] for path in entries if (match := prefab.fullmatch(path))}
+        missing = {match[1] for entry in manifest["missing"]
+                   if (match := prefab.fullmatch(entry["relative_path"])) and match[1] not in present}
+        if len(missing) > 256:
+            raise AssetDataError("Missing event background count exceeds its limit")
+        available = set()
+        for path, entry in entries.items():
+            match = image.fullmatch(path)
+            if not match or match[1] not in missing or match[1] in available:
+                continue
+            try:
+                self._read_blob(entry)
+            except AssetDataError:
+                continue
+            available.add(match[1])
+        return {"asset_revision": manifest["revision"], "backgrounds": [
+            {"id": identifier, "image_available": identifier in available} for identifier in sorted(missing)
+        ]}
+
     @staticmethod
     def summary(manifest: dict) -> dict:
         return {key: manifest[key] for key in ("revision", "master", "prefix", "indexed_count", "verified_count", "complete")} | {

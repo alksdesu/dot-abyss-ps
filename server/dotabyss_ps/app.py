@@ -177,7 +177,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         request.state.request_keys = []
         request.state.reason = ""
         response = await call_next(request)
-        if request.url.path.startswith(("/admin/", "/local/admin-sync", "/console/auth")):
+        if request.url.path.startswith(("/admin/", "/local/admin-sync", "/console/auth")) or request.url.path == "/local/event-backgrounds":
             response.headers["Cache-Control"] = "no-store"
         if request.url.path not in ("/healthz", "/diagnostics"):
             store.observe(request.method, request.url.path[:300], response.status_code, request.state.request_keys, request.state.reason)
@@ -237,6 +237,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         except ValueError as exc:
             raise RequestFailure(409, 4090, str(exc)) from exc
         return JSONResponse({"status": "ok", "runtime": runtime})
+
+    @app.get("/local/event-backgrounds")
+    async def event_backgrounds():
+        try:
+            return JSONResponse(assets.event_backgrounds())
+        except AssetDataError as exc:
+            raise RequestFailure(503, 5035, str(exc)) from exc
 
     @app.get("/local/master")
     async def active_master():

@@ -38,3 +38,5 @@ PC 首次部署直接运行 [PC 首次启动](first-start.md) 中的 `setup-pc.p
 ## 4. HTTP 资源服务
 
 `GET /resources/...` 根据当前激活的 manifest 返回对应 blob 及 SHA-256 ETag（支持 `304 Not Modified` 条件请求）。带 Hash128 后缀的资源启用长期缓存，catalog 与 hash 路径使用 `no-cache` 策略以便版本切换后即时生效。
+
+`GET /local/event-backgrounds` 列出活动背景预制体缺失、但同名剧情底图可读的活动 id（仅 PC 资源集，最多 256 条，`no-store`），供插件搭替代背景；重新导入资源后名单随清单变化。
